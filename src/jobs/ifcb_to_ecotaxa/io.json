@@ -1,0 +1,106 @@
+{
+    "inputs": {
+        "project_name": {
+            "type": "STRING",
+            "cli_arg": "project",
+            "cli_short": "p",
+            "required": true,
+            "hint": "Project name"
+        },
+        "input_files": {
+            "type": "STRING",
+            "multiple": true,
+            "cli_arg": "input",
+            "cli_short": "i",
+            "required": true,
+            "hint": "Input IFCB files and feature files (roi, adc, hdr, csv)"
+        },
+        "output_file": {
+            "type": "STRING",
+            "cli_arg": "output",
+            "cli_short": "o",
+            "required": true,
+            "hint": "Output zip or tsv file"
+        },
+        "operator_name": {
+            "type": "STRING",
+            "cli_arg": "operator",
+            "required": true,
+            "hint": "Name of the operator from when the sample was collected"
+        },
+        "ship_name": {
+            "type": "STRING",
+            "cli_arg": "ship",
+            "hint": "Name of the ship from when the sample was collected"
+        },
+        "cruise_name": {
+            "type": "STRING",
+            "cli_arg": "cruise",
+            "hint": "Name of the cruise from when the sample was collected"
+        },
+        "project_name": {
+            "type": "STRING",
+            "cli_arg": "project",
+            "hint": "Name of the project the sample relates to"
+        },
+        "sample_depth": {
+            "type": "INTEGER",
+            "cli_arg": "depth",
+            "default": 5,
+            "hint": "The depth from which the sample was collected"
+        },
+        "table_only": {
+            "type": "BOOLEAN",
+            "cli_arg": "tableonly",
+            "hint": "Output just a tsv file, without image data"
+        },
+        "station_id": {
+            "type": "STRING",
+            "cli_arg": "stationid"
+        },
+        "ctd_cast": {
+            "type": "STRING",
+            "cli_arg": "ctdcast"
+        },
+        "sample_barcode": {
+            "type": "STRING",
+            "cli_arg": "barcode"
+        },
+        "sample_comment": {
+            "type": "STRING",
+            "cli_arg": "comment"
+        },
+        "sampling_gear": {
+            "type": "STRING",
+            "cli_arg": "samplegear"
+        },
+        "initial_collected_volume_m3": {
+            "type": "FLOAT",
+            "cli_arg": "collectedvolume"
+        },
+        "concentrated_sample_volume_m3": {
+            "type": "FLOAT",
+            "cli_arg": "concentratedvolume"
+        },
+        "dilution_factor": {
+            "type": "FLOAT",
+            "cli_arg": "dilutionfactor"
+        },
+        "dilution_method": {
+            "type": "STRING",
+            "cli_arg": "dilutionmethod"
+        },
+        "fixative": {
+            "type": "STRING",
+            "cli_arg": "fixative"
+        },
+        "sieve_min_um": {
+            "type": "FLOAT",
+            "cli_arg": "sievemin"
+        },
+        "sieve_max_um": {
+            "type": "FLOAT",
+            "cli_arg": "sievemax"
+        }
+    }
+}
