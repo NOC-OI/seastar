@@ -3,6 +3,8 @@ import libifcb
 from datetime import datetime, timezone
 import csv
 import json
+import zipfile
+import io
 
 class IFCBEntryProvider:
     def __init__(self, roi_readers, ifcb_ids, with_images = True, options = {}):
@@ -190,7 +192,7 @@ class IFCBEntryProvider:
 
             if self.with_images:
                 record["img_file_name"] = observation_id + ".png"
-                record["img_rank"] = None
+                record["img_rank"] = 0
                 return (record, roi.image)
             else:
                 return (record, )
@@ -200,7 +202,14 @@ class MainJob:
     def __init__(self, options):
 
         self.options = options
+
         print(options)
+
+        if "table_only" in options.keys():
+            self.with_images = not options["table_only"]
+        else:
+            self.with_images = True
+
         input_files_list = []
         for input_file_path in options["input_files"]:
             input_files_list.append(os.path.realpath(input_file_path))
@@ -223,20 +232,70 @@ class MainJob:
         for i in range(len(ifcb_files)):
             roi_readers.append(libifcb.ROIReader(ifcb_files[i] + ".hdr", ifcb_files[i] + ".adc", ifcb_files[i] + ".roi"))
 
-        self.entry_provider = IFCBEntryProvider(roi_readers, ifcb_bins, False, options)
+        self.entry_provider = IFCBEntryProvider(roi_readers, ifcb_bins, self.with_images, options)
 
     def execute(self):
-        with open(self.options["output_file"], "w") as ecotaxa_md:
+        if self.with_images:
+            zip_files = 1
+            out_zip = None
+            max_size = None
+            out_file = self.options["output_file"]
+            out_file_se = os.path.splitext(out_file)
+            if max_size is not None:
+                out_zip = zipfile.ZipFile(out_file_se[0] + "_part" + str(zip_files) + out_file_se[1], 'w')
+            else:
+                out_zip = zipfile.ZipFile(out_file, 'w')
+
+            container = os.path.basename(out_file_se[0]) + "_part" + str(zip_files)
+
+            ecotaxa_md = io.StringIO()
             ecotaxa_md_writer = csv.DictWriter(ecotaxa_md, fieldnames=self.entry_provider.ecotaxa_table_header.keys(), quoting=csv.QUOTE_NONNUMERIC, delimiter='\t', lineterminator='\n')
             ecotaxa_md_writer.writeheader()
             ecotaxa_md_writer.writerow(self.entry_provider.ecotaxa_table_header)
+            running_compressed_size = 0
+            tsv_name_suffix = ""
 
             try:
                 while True:
                     entry = next(self.entry_provider)
+                    tsv_name_suffix = entry[0]["sample_id"] # So every TSV is likely to have a different, but predictable name
                     ecotaxa_md_writer.writerow(entry[0])
+
+                    imbuffer = io.BytesIO()
+                    entry[1].save(imbuffer, "png")
+                    imbytes = imbuffer.getvalue()
+                    running_compressed_size += len(imbytes)
+                    out_zip.writestr(container + "/" + entry[0]["img_file_name"], imbytes)
+
+                    if max_size is not None:
+                        if running_compressed_size > max_size:
+                            zip_files += 1
+                            out_zip.writestr(container + "/ecotaxa_" + tsv_name_suffix + ".tsv", ecotaxa_md.getvalue())
+                            out_zip.close()
+                            out_zip = zipfile.ZipFile(out_file_se[0] + "_part" + str(zip_files) + out_file_se[1], 'w')
+                            container = os.path.basename(out_file_se[0]) + "_part" + str(zip_files)
+                            ecotaxa_md = io.StringIO()
+                            ecotaxa_md_writer = csv.DictWriter(ecotaxa_md, fieldnames=self.entry_provider.ecotaxa_table_header.keys(), quoting=csv.QUOTE_NONNUMERIC, delimiter='\t', lineterminator='\n')
+                            ecotaxa_md_writer.writeheader()
+                            ecotaxa_md_writer.writerow(self.entry_provider.ecotaxa_table_header)
+                            running_compressed_size = 0
             except StopIteration:
                 pass
+
+            out_zip.writestr(container + "/ecotaxa_" + tsv_name_suffix + ".tsv", ecotaxa_md.getvalue())
+            out_zip.close()
+        else:
+            with open(self.options["output_file"], "w") as ecotaxa_md:
+                ecotaxa_md_writer = csv.DictWriter(ecotaxa_md, fieldnames=self.entry_provider.ecotaxa_table_header.keys(), quoting=csv.QUOTE_NONNUMERIC, delimiter='\t', lineterminator='\n')
+                ecotaxa_md_writer.writeheader()
+                ecotaxa_md_writer.writerow(self.entry_provider.ecotaxa_table_header)
+
+                try:
+                    while True:
+                        entry = next(self.entry_provider)
+                        ecotaxa_md_writer.writerow(entry[0])
+                except StopIteration:
+                    pass
 
 
 
