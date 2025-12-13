@@ -2,6 +2,7 @@ import sys
 import importlib
 import os
 import json
+import math
 
 if __name__ == "__main__":
     python_file_loc = os.path.dirname(os.path.realpath(__file__))
@@ -150,7 +151,29 @@ if __name__ == "__main__":
         #print("")
     else:
         print("Preparing job...")
-        main_job_object = found_job_modules[command].MainJob(options)
+
+        def prf(prop, etr):
+            bar_w = 32
+            bar_x = round(bar_w * prop)
+            bar_l = "#"*bar_x
+            bar_r = "_"*(bar_w - bar_x)
+            percent = f"{prop:.2%}"
+            secs = round(etr)
+            timestr = f"about {secs}s remaining..."
+            if secs < 3:
+                timestr = "only a few seconds remaining..."
+            if secs > 60:
+                mins = math.floor(secs / 60)
+                secs = secs - (mins * 60)
+                timestr = f"about {mins}min {secs}s remaining..."
+            if secs > 3600:
+                hrs = math.floor(mins / 60)
+                mins = mins - (hrs * 60)
+                timestr = f"about {hrs}hr {mins}min remaining..."
+
+            print(f"\r[{bar_l}{bar_r}] {percent} done, {timestr}                ", end="")
+
+        main_job_object = found_job_modules[command].MainJob(options, prf)
         print("Processing...")
         main_job_object.execute()
         print("Done!")

@@ -199,9 +199,10 @@ class IFCBEntryProvider:
         raise StopIteration
 
 class MainJob:
-    def __init__(self, options):
+    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s")):
 
         self.options = options
+        self.report_progress = progress_reporting_function
 
         print(options)
 

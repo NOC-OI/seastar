@@ -1,0 +1,30 @@
+{
+    "inputs": {
+        "input_files": {
+            "type": "STRING",
+            "multiple": true,
+            "cli_arg": "input",
+            "cli_short": "i",
+            "required": true,
+            "hint": "Input IFCB files and feature files (roi, adc, hdr, csv)"
+        },
+        "output_folder": {
+            "type": "STRING",
+            "cli_arg": "output",
+            "cli_short": "o",
+            "required": true,
+            "hint": "Output folder"
+        },
+        "force_overwrite": {
+            "type": "BOOLEAN",
+            "cli_arg": "force",
+            "cli_short": "f",
+            "hint": "Force overwrite of files if they already exist"
+        },
+        "ignore_existing": {
+            "type": "BOOLEAN",
+            "cli_arg": "ignore",
+            "hint": "Ignore existing files if they already exist"
+        }
+    }
+}
