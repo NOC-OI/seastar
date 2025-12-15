@@ -101,6 +101,26 @@
         "sieve_max_um": {
             "type": "FLOAT",
             "cli_arg": "sievemax"
+        },
+        "um_per_pixel": {
+            "type": "FLOAT",
+            "default": 3.4,
+            "cli_arg": "umperpixel"
+        },
+        "volume_imaged": {
+            "type": "FLOAT",
+            "cli_arg": "volumeimaged",
+            "hint": "EcoTaxa column: acq_volimage"
+        },
+        "max_esd_save_threshold": {
+            "type": "FLOAT",
+            "cli_arg": "maxesd",
+            "hint": "EcoTaxa column: acq_max_esd"
+        },
+        "min_esd_save_threshold": {
+            "type": "FLOAT",
+            "cli_arg": "minesd",
+            "hint": "EcoTaxa column: acq_min_esd"
         }
     }
 }

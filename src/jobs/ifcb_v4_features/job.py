@@ -33,15 +33,11 @@ class MainJob:
         self.ifcb_files = ifcb_files
         self.ifcb_bins = ifcb_bins
         self.total_rois = 0
-        self.currently_processing = 0
-        self.last_time = 0
-
         for roi_reader in roi_readers:
             self.total_rois += len(roi_reader.rows)
 
     def generate_features_one_file(self, sample, source_file, bin_id, csv_file):
         first = True
-        self.first_time = time.time()
         feature_extractor = planktofeatures.extractors.WHOIVersion4()
         with open(csv_file, "w", newline="") as csvfile:
             csv_writer = csv.writer(csvfile, delimiter=",", quotechar="\"", quoting=csv.QUOTE_MINIMAL)
@@ -71,6 +67,9 @@ class MainJob:
                     self.report_progress(proportion, remaining_time) # Placeholdr
 
     def execute(self):
+        self.first_time = time.time()
+        self.currently_processing = 0
+        self.last_time = time.time()
         for roi_reader_idx in range(len(self.roi_readers)):
             csv_file = os.path.join(self.options["output_folder"], self.ifcb_bins[roi_reader_idx] + "_features_v4.csv")
             self.generate_features_one_file(self.roi_readers[roi_reader_idx], self.ifcb_files[roi_reader_idx], self.ifcb_bins[roi_reader_idx], csv_file)

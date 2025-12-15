@@ -3,8 +3,10 @@ import libifcb
 from datetime import datetime, timezone
 import csv
 import json
+import re
 import zipfile
 import io
+import time
 
 class IFCBEntryProvider:
     def __init__(self, roi_readers, ifcb_ids, with_images = True, options = {}):
@@ -14,16 +16,14 @@ class IFCBEntryProvider:
         self.reader_index = 0
         self.index = 0
         self.options = options
+        self.column_sources = {}
+        self.match_data_keys = {}
+        self.process_time = datetime.now().replace(tzinfo=timezone.utc)
 
         self.ecotaxa_table_header = {
                 "object_id": "[t]",
-                "object_lat": "[f]",
-                "object_lon": "[f]",
                 "object_date": "[t]",
                 "object_time": "[t]",
-                "object_area": "[f]",
-                "object_convexarea": "[f]",
-                "object_convexperimeter": "[f]",
                 "object_roi_width": "[f]",
                 "object_roi_height": "[f]",
                 "process_id": "",
@@ -31,15 +31,10 @@ class IFCBEntryProvider:
                 "process_time": "[t]",
                 "process_pixel_um": "[f]",
                 "process_feature_extractor": "[t]",
-                "process_min_thresh": "[f]",
-                "process_max_thresh": "[f]",
                 "acq_id": "[t]",
                 "acq_operator": "[t]",
                 "acq_instrument": "[t]",
                 "acq_sn": "[t]",
-                "acq_volimage": "[f]",
-                "acq_min_esd": "[f]",
-                "acq_max_esd": "[f]",
                 "acq_run_time": "[f]",
                 "acq_grab_time_start": "[f]",
                 "acq_trigger_number": "[f]",
@@ -59,6 +54,24 @@ class IFCBEntryProvider:
 
         self.static_additions = {
             }
+
+        self.key_translations = {
+                "lat": ("[f]", "object_lat"),
+                "latitude": ("[f]", "object_lat"),
+                "lon": ("[f]", "object_lon"),
+                "long": ("[f]", "object_lon"),
+                "longitude": ("[f]", "object_lon"),
+                "area": ("[f]", "object_area"),
+                "convexarea": ("[f]", "object_convexarea"),
+                "convexperimeter": ("[f]", "object_convexperimeter"),
+                "feature_extractor": ("[t]", "process_feature_extractor"),
+                "volume_imaged": ("[f]", "acq_volimage"),
+                "max_esd_save_threshold": ("[f]", "acq_min_esd"),
+                "min_esd_save_threshold": ("[f]", "acq_max_esd")
+            }
+
+        #,
+        #        "": ("[]", "")
 
         if "ship_name" in self.options.keys():
             self.static_additions["sample_ship"] = self.options["ship_name"]
@@ -110,12 +123,61 @@ class IFCBEntryProvider:
         if "sieve_max_um" in self.options.keys():
             self.static_additions["sample_sieve_max_um"] = self.options["sieve_max_um"]
             self.ecotaxa_table_header["sample_sieve_max_um"] = "[f]"
+        if "feature_extractor_min_thresh" in self.options.keys():
+            self.static_additions["process_min_thresh"] = self.options["feature_extractor_min_thresh"]
+            self.ecotaxa_table_header["process_min_thresh"] = "[f]"
+        if "feature_extractor_max_thresh" in self.options.keys():
+            self.static_additions["process_max_thresh"] = self.options["feature_extractor_max_thresh"]
+            self.ecotaxa_table_header["process_max_thresh"] = "[f]"
+        if "um_per_pixel" in self.options.keys():
+            self.static_additions["process_pixel_um"] = self.options["um_per_pixel"]
+            self.ecotaxa_table_header["process_pixel_um"] = "[f]"
 
 
         if self.with_images:
             print("With images!")
             self.ecotaxa_table_header["img_file_name"] = "[t]"
             self.ecotaxa_table_header["img_rank"] = "[f]"
+
+        self.total_rois = 0
+        for roi_reader in roi_readers:
+            self.total_rois += len(roi_reader.rows)
+
+
+
+    def add_csv_file(self, csv_fd, csv_filename):
+        metadata_dict = list(csv.DictReader(csv_fd))
+        dict_keys = metadata_dict[0].keys()
+        can_join_dict = False
+        metadata_dict_info = {"data_keys": []}
+        bin_id_regex = re.compile(r'D[0-9]{8}T[0-9]{6}_IFCB[0-9]+')
+        if ("bin" in dict_keys) or ("filename" in dict_keys):
+            can_join_dict = True
+            metadata_dict_info["bin_key_column"] = "filename"
+            if "bin" in dict_keys:
+                metadata_dict_info["bin_key_column"] = "bin"
+        if ("roi_number" in dict_keys):
+            can_join_dict = True
+            metadata_dict_info["roi_key_column"] = "roi_number"
+            result = bin_id_regex.search(csv_filename)
+            metadata_dict_info["bin_match"] = result.group()
+        if can_join_dict:
+            metadata_dict_info["dict"] = metadata_dict
+            matched_ecotaxa_columns = []
+            matched_ecotaxa_types = []
+            match_data_keys = []
+            for candidate_key in self.key_translations.keys():
+                if candidate_key in dict_keys:
+                    match_data_keys.append(candidate_key)
+                    matched_ecotaxa_types.append(self.key_translations[candidate_key][0])
+                    matched_ecotaxa_columns.append(self.key_translations[candidate_key][1])
+
+            for column_index in range(len(matched_ecotaxa_columns)):
+                if matched_ecotaxa_columns[column_index] not in self.column_sources.keys():
+                    self.column_sources[matched_ecotaxa_columns[column_index]] = []
+                self.ecotaxa_table_header[matched_ecotaxa_columns[column_index]] = matched_ecotaxa_types[column_index]
+                self.match_data_keys[matched_ecotaxa_columns[column_index]] = match_data_keys[column_index]
+                self.column_sources[matched_ecotaxa_columns[column_index]].append(metadata_dict_info)
 
     def __iter__(self):
         return self
@@ -129,7 +191,10 @@ class IFCBEntryProvider:
                     self.reader_index += 1
                     self.index = 0
             dt = datetime.strptime(self.ifcb_ids[self.reader_index].split("_")[0], "D%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+
             observation_id = self.ifcb_ids[self.reader_index] + "_" + str(roi.index).zfill(5)
+            ifcb_bin = self.ifcb_ids[self.reader_index]
+
 
             extents = [(0, roi.array.shape[0]), (0, roi.array.shape[1])]
             origin_extents = roi.array.shape
@@ -140,34 +205,26 @@ class IFCBEntryProvider:
             for key in roi.trigger.raw.keys():
                 trigger_values[key] = float(roi.trigger.raw[key])
 
+
+            trigger_id = self.ifcb_ids[self.reader_index] + "_TN" + str(int(trigger_values["trigger_number"]))
+            ifcb_sn = self.ifcb_ids[self.reader_index].split("_")[1][4:]
+
             #print(json.dumps(list(trigger_values.keys()), indent=4))
 
             #print(self.options)
 
             record = {
                 "object_id": observation_id,
-                "object_lat": None,
-                "object_lon": None,
                 "object_date": dt.strftime("%Y-%m-%d"),
                 "object_time":  dt.strftime("%H:%M:%S"),
-                "object_area": None,
-                "object_convexarea": None,
-                "object_convexperimeter": None,
                 "object_roi_width": int(trigger_values["roi_width"]),
                 "object_roi_height": int(trigger_values["roi_height"]),
                 "process_id": None,
-                "process_date": None,
-                "process_time": None,
-                "process_pixel_um": None,
-                "process_feature_extractor": None,
-                "process_min_thresh": None,
-                "process_max_thresh": None,
-                "acq_id": self.ifcb_ids[self.reader_index] + "_TN" + str(int(trigger_values["trigger_number"])),
+                "process_date": self.process_time.strftime("%Y-%m-%d"),
+                "process_time": self.process_time.strftime("%H:%M:%S"),
+                "acq_id": trigger_id,
                 "acq_instrument": "IFCB",
-                "acq_sn": self.ifcb_ids[self.reader_index].split("_")[1][4:],
-                "acq_volimage": None,
-                "acq_min_esd": None,
-                "acq_max_esd": None,
+                "acq_sn": ifcb_sn,
                 "acq_operator": self.options["operator_name"],
                 "acq_run_time": trigger_values["run_time"],
                 "acq_trigger_number": trigger_values["trigger_number"],
@@ -183,12 +240,35 @@ class IFCBEntryProvider:
                 "acq_status": trigger_values["status"],
                 "acq_time_of_flight": trigger_values["time_of_flight"],
                 "acq_start_point": trigger_values["start_point"],
-                "sample_id": self.ifcb_ids[self.reader_index],
+                "sample_id": ifcb_bin,
             }
 
             # Add in denormalised data for the whole sample
             for key in self.static_additions.keys():
                 record[key] = self.static_additions[key]
+
+            # Add in data from CSV tables
+            for ecotaxa_column in self.column_sources.keys():
+                value = None
+                for column_source in self.column_sources[ecotaxa_column]:
+                    candidate = True
+                    if "bin_match" in column_source.keys():
+                        if not ifcb_bin == column_source["bin_match"]:
+                            candidate = False
+                    if candidate:
+                        if "roi_key_column" in column_source.keys():
+                            for row in column_source["dict"]:
+                                if int(row[column_source["roi_key_column"]]) == roi.index:
+                                    value = row[self.match_data_keys[ecotaxa_column]]
+                        if "bin_key_column" in column_source.keys():
+                            for row in column_source["dict"]:
+                                if row[column_source["bin_key_column"]] == ifcb_bin:
+                                    value = row[self.match_data_keys[ecotaxa_column]]
+                if value is None:
+                    print("ERROR, NO MATCH ON " + observation_id)
+                else:
+                    record[ecotaxa_column] = value
+
 
             if self.with_images:
                 record["img_file_name"] = observation_id + ".png"
@@ -199,12 +279,21 @@ class IFCBEntryProvider:
         raise StopIteration
 
 class MainJob:
+    def calc_progress_report(self):
+        self.last_time = time.time()
+        proportion = self.currently_processing/self.total_rois
+        elapsed_time = self.last_time - self.first_time
+        time_per_roi = elapsed_time / self.currently_processing
+        remaining_rois = self.total_rois - self.currently_processing
+        remaining_time = time_per_roi * remaining_rois
+        self.report_progress(proportion, remaining_time)
+
     def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s")):
 
         self.options = options
         self.report_progress = progress_reporting_function
 
-        print(options)
+        #print(options)
 
         if "table_only" in options.keys():
             self.with_images = not options["table_only"]
@@ -215,19 +304,27 @@ class MainJob:
         for input_file_path in options["input_files"]:
             input_files_list.append(os.path.realpath(input_file_path))
 
-        print(input_files_list)
+        #print(input_files_list)
 
         ifcb_bins = []
         ifcb_files = []
         roi_readers = []
 
         intermediate_files_list = set()
+        csv_files_list = set()
         for file_name in input_files_list:
-            intermediate_files_list.add(os.path.splitext(file_name)[0])
+            splitext = os.path.splitext(file_name)
+            if (splitext[1] == ".hdr") or (splitext[1] == ".adc") or (splitext[1] == ".roi"):
+                intermediate_files_list.add(splitext[0])
+            elif (splitext[1] == ".csv"):
+                csv_files_list.add(file_name)
 
         for file_name in intermediate_files_list:
             ifcb_bins.append(os.path.basename(file_name))
             ifcb_files.append(file_name)
+
+        if len(ifcb_bins) == 0:
+            raise RuntimeException("No IFCB bins supplied!")
 
 
         for i in range(len(ifcb_files)):
@@ -235,7 +332,16 @@ class MainJob:
 
         self.entry_provider = IFCBEntryProvider(roi_readers, ifcb_bins, self.with_images, options)
 
+        for csv_file in csv_files_list:
+            self.entry_provider.add_csv_file(open(csv_file, "r"), csv_file)
+
+        self.total_rois = self.entry_provider.total_rois
+
     def execute(self):
+        self.first_time = time.time()
+        self.currently_processing = 0
+        self.last_time = time.time()
+
         if self.with_images:
             zip_files = 1
             out_zip = None
@@ -259,6 +365,7 @@ class MainJob:
             try:
                 while True:
                     entry = next(self.entry_provider)
+                    self.currently_processing += 1
                     tsv_name_suffix = entry[0]["sample_id"] # So every TSV is likely to have a different, but predictable name
                     ecotaxa_md_writer.writerow(entry[0])
 
@@ -267,6 +374,9 @@ class MainJob:
                     imbytes = imbuffer.getvalue()
                     running_compressed_size += len(imbytes)
                     out_zip.writestr(container + "/" + entry[0]["img_file_name"], imbytes)
+
+                    if (self.currently_processing % 16) == 0:
+                        self.calc_progress_report()
 
                     if max_size is not None:
                         if running_compressed_size > max_size:
@@ -294,7 +404,10 @@ class MainJob:
                 try:
                     while True:
                         entry = next(self.entry_provider)
+                        self.currently_processing += 1
                         ecotaxa_md_writer.writerow(entry[0])
+                        if (self.currently_processing % 64) == 0:
+                            self.calc_progress_report()
                 except StopIteration:
                     pass
 

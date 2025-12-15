@@ -130,6 +130,20 @@ if __name__ == "__main__":
     if command is None:
         help_flag = True
 
+    if not help_flag:
+        for option_key in io_def["inputs"].keys():
+            if option_key not in options.keys():
+                if "default" in io_def["inputs"][option_key].keys():
+                    options[option_key] = io_def["inputs"][option_key]["default"]
+                elif "required" in io_def["inputs"][option_key].keys():
+                    if io_def["inputs"][option_key]["required"]:
+                        help_flag = True
+                        ehelp_msg = "Missing required option \"" + option_key +  "\", specified by"
+                        if "cli_arg" in io_def["inputs"][option_key]:
+                            ehelp_msg += " \"--" + io_def["inputs"][option_key]["cli_arg"] + "\""
+                        if "cli_short" in io_def["inputs"][option_key]:
+                            ehelp_msg += " \"-" + io_def["inputs"][option_key]["cli_short"] + "\""
+
     if help_flag:
         print("")
         print("SeaSTAR")
