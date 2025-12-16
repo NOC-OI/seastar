@@ -2,6 +2,7 @@ import sys
 import importlib
 import os
 import json
+import time
 import math
 
 if __name__ == "__main__":
@@ -140,9 +141,11 @@ if __name__ == "__main__":
                         help_flag = True
                         ehelp_msg = "Missing required option \"" + option_key +  "\", specified by"
                         if "cli_arg" in io_def["inputs"][option_key]:
-                            ehelp_msg += " \"--" + io_def["inputs"][option_key]["cli_arg"] + "\""
+                            ehelp_msg += " \"--" + io_def["inputs"][option_key]["cli_arg"] + " <value>\""
                         if "cli_short" in io_def["inputs"][option_key]:
-                            ehelp_msg += " \"-" + io_def["inputs"][option_key]["cli_short"] + "\""
+                            ehelp_msg += " \"-" + io_def["inputs"][option_key]["cli_short"] + " <value>\""
+                        if "hint" in io_def["inputs"][option_key].keys():
+                            ehelp_msg += "\nHint: " + io_def["inputs"][option_key]["hint"]
 
     if help_flag:
         print("")
@@ -164,6 +167,7 @@ if __name__ == "__main__":
         #print("    ifcbproc features <roi_file> [roi_file...] [-o <output_path>]")
         #print("")
     else:
+        job_start_time = time.time()
         print("Preparing job...")
 
         def prf(prop, etr):
@@ -190,4 +194,19 @@ if __name__ == "__main__":
         main_job_object = found_job_modules[command].MainJob(options, prf)
         print("Processing...")
         main_job_object.execute()
+        job_end_time = time.time()
+
+        secs = round(job_end_time - job_start_time)
+        timestr = f"{secs}s"
+        if secs > 60:
+            mins = math.floor(secs / 60)
+            secs = secs - (mins * 60)
+            timestr = f"{mins}min {secs}s"
+        if secs > 3600:
+            hrs = math.floor(mins / 60)
+            mins = mins - (hrs * 60)
+            timestr = f"{hrs}hr {mins}min"
+
+        print(f"\rFinished in  {timestr}                                      ")
         print("Done!")
+

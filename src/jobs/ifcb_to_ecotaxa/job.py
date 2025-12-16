@@ -161,11 +161,15 @@ class IFCBEntryProvider:
             metadata_dict_info["roi_key_column"] = "roi_number"
             result = bin_id_regex.search(csv_filename)
             metadata_dict_info["bin_match"] = result.group()
+            metadata_dict_info["roi_key_index"] = {}
+            for row_index in range(len(metadata_dict)):
+                metadata_dict_info["roi_key_index"][int(metadata_dict[row_index][metadata_dict_info["roi_key_column"]])] = row_index
         if can_join_dict:
             metadata_dict_info["dict"] = metadata_dict
             matched_ecotaxa_columns = []
             matched_ecotaxa_types = []
             match_data_keys = []
+
             for candidate_key in self.key_translations.keys():
                 if candidate_key in dict_keys:
                     match_data_keys.append(candidate_key)
@@ -257,9 +261,11 @@ class IFCBEntryProvider:
                             candidate = False
                     if candidate:
                         if "roi_key_column" in column_source.keys():
-                            for row in column_source["dict"]:
-                                if int(row[column_source["roi_key_column"]]) == roi.index:
-                                    value = row[self.match_data_keys[ecotaxa_column]]
+                            #for row in column_source["dict"]:
+                            #    if int(row[column_source["roi_key_column"]]) == roi.index:
+                            #        value = row[self.match_data_keys[ecotaxa_column]]
+                            row_index = column_source["roi_key_index"][roi.index]
+                            value = column_source["dict"][row_index][self.match_data_keys[ecotaxa_column]]
                         if "bin_key_column" in column_source.keys():
                             for row in column_source["dict"]:
                                 if row[column_source["bin_key_column"]] == ifcb_bin:

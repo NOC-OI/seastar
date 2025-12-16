@@ -38,7 +38,7 @@
             "type": "STRING",
             "cli_arg": "operator",
             "required": true,
-            "hint": "Name of the operator from when the sample was collected"
+            "hint": "Name of the operator of the instrument from when the sample was collected"
         },
         "ship_name": {
             "type": "STRING",
