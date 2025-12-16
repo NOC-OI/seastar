@@ -22,6 +22,18 @@
             "required": true,
             "hint": "Output zip or tsv file"
         },
+        "ignore_before": {
+            "type": "STRING",
+            "cli_arg": "fromdate",
+            "hint": "Exclude bins captured before this date and time",
+            "semantic_type": "ISO_DATETIME"
+        },
+        "ignore_after": {
+            "type": "STRING",
+            "cli_arg": "todate",
+            "hint": "Exclude bins captured after this date and time",
+            "semantic_type": "ISO_DATETIME"
+        },
         "operator_name": {
             "type": "STRING",
             "cli_arg": "operator",
