@@ -381,7 +381,7 @@ class MainJob:
                     running_compressed_size += len(imbytes)
                     out_zip.writestr(container + "/" + entry[0]["img_file_name"], imbytes)
 
-                    if (self.currently_processing % 16) == 0:
+                    if (self.currently_processing % 512) == 0:
                         self.calc_progress_report()
 
                     if max_size is not None:
@@ -412,7 +412,7 @@ class MainJob:
                         entry = next(self.entry_provider)
                         self.currently_processing += 1
                         ecotaxa_md_writer.writerow(entry[0])
-                        if (self.currently_processing % 64) == 0:
+                        if (self.currently_processing % 512) == 0:
                             self.calc_progress_report()
                 except StopIteration:
                     pass
