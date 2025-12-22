@@ -1,5 +1,5 @@
-# SeaSTAR
-![SeaSTAR Logo](src/icon.png)
+![SeaSTAR Logo](seastar-logo-text.png)
+
 SeaSTAR (Sea-faring System for Tagging, Attribution and Redistribution) is a CLI and GUI application for processing biodiversity data collected at sea.
 
 ## Use cases
