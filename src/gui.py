@@ -20,49 +20,54 @@ import tkinter
 import tkinter.filedialog
 import tkinter.messagebox
 import tkinter.scrolledtext
+import os
 
-root = tkinter.Tk()
+class SeaSTARGUI():
+    def __init__(self, python_file_loc=""):
+        self.root = tkinter.Tk()
 
-root.title("SeaSTAR")
-root.geometry("600x400")
-root.columnconfigure(index=0, weight=6)
-root.columnconfigure(index=1, weight=2)
+        self.root.title("SeaSTAR")
+        self.root.geometry("600x400")
+        self.root.iconphoto(False, tkinter.PhotoImage(file=os.path.join(python_file_loc, "icon.png")))
+        #self.root.columnconfigure(index=0, weight=6)
+        #self.root.columnconfigure(index=1, weight=2)
 
-standard_xpad = 5
-standard_ypad = 5
+        self.standard_xpad = 5
+        self.standard_ypad = 5
 
-label = tkinter.Label(root, text="Welcome to SeaSTAR! Start by selecting your input data.")
-label.grid(column=0, columnspan=2, row=0, sticky="W", padx=standard_xpad, pady=standard_ypad)
+        self.head_text = tkinter.Label(self.root, text="Welcome to SeaSTAR! Start by selecting a job.")
+        self.head_Text.grid(column=0, columnspan=2, row=0, sticky="W", padx=self.standard_xpad, pady=self.standard_ypad)
 
-input_files_text = tkinter.scrolledtext.ScrolledText(root, width=8,  height=8)
-input_files_text.grid(column=0, row=1, padx=standard_xpad, pady=standard_ypad, sticky="NSEW")
-input_files_text.configure(state ='disabled')
+        #input_files_text = tkinter.scrolledtext.ScrolledText(self.root, width=8,  height=8)
+        #input_files_text.grid(column=0, row=1, padx=standard_xpad, pady=standard_ypad, sticky="NSEW")
+        #input_files_text.configure(state ='disabled')
 
-def button_execute_onclick():
-    label.configure(text="Choose files...")
+        #def button_execute_onclick():
+        #    label.configure(text="Choose files...")#
 
-    valid_filetypes = (
-        ('IFCB files', '*.roi *.adc *.hdr'),
-        ('Image files', '*.png *.jpg *.jpeg *.tif *.tiff')
-    )
+        #    valid_filetypes = (
+        #        ('IFCB files', '*.roi *.adc *.hdr'),
+        #        ('Image files', '*.png *.jpg *.jpeg *.tif *.tiff')
+        #    )
 
-    selected_files = tkinter.filedialog.askopenfilenames(
-        title='Select input files for processing',
-        filetypes=valid_filetypes)
+        #    selected_files = tkinter.filedialog.askopenfilenames(
+        #        title='Select input files for processing',
+        #        filetypes=valid_filetypes)
 
-    #tkinter.messagebox.showinfo(
-    #    title='Selected files!',
-    #    message="Test"
-    #)
+            #tkinter.messagebox.showinfo(
+            #    title='Selected files!',
+            #    message="Test"
+            #)
 
-    #label.configure(text=", ".join(selected_files))
-    input_files_text.configure(state="normal")
-    input_files_text.insert(tkinter.INSERT, "\n".join(selected_files))
-    input_files_text.configure(state="disabled")
+            #label.configure(text=", ".join(selected_files))
+        #    input_files_text.configure(state="normal")
+        #    input_files_text.insert(tkinter.INSERT, "\n".join(selected_files))
+        #    input_files_text.configure(state="disabled")
 
-#fg="red",
+        #fg="red",
 
-button = tkinter.Button(root, text="Select files", command=button_execute_onclick)
-button.grid(column=1, row=1, sticky="SEW", padx=standard_xpad, pady=standard_ypad)
+        #button = tkinter.Button(self.root, text="Select files", command=button_execute_onclick)
+        #button.grid(column=1, row=1, sticky="SEW", padx=standard_xpad, pady=standard_ypad)
 
-root.mainloop()
+    def enter_mainloop(self):
+        self.root.mainloop()

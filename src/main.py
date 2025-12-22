@@ -4,6 +4,7 @@ import os
 import json
 import time
 import math
+from gui import SeaSTARGUI
 
 if __name__ == "__main__":
     python_file_loc = os.path.dirname(os.path.realpath(__file__))
@@ -37,6 +38,7 @@ if __name__ == "__main__":
     multiple_capture_switch = False
     options = {}
     io_def = None
+    gui_flag = True
 
     for arg in eargs:
         if arg.startswith("--"):
@@ -48,6 +50,8 @@ if __name__ == "__main__":
                 ehelp_msg = None
                 help_flag = True
                 break
+            if arg == "--gui":
+                gui_flag = True
             else:
                 option_recognised = False
                 if io_def is not None:
@@ -129,23 +133,25 @@ if __name__ == "__main__":
                 mode = mode_stack.pop()
 
     if command is None:
-        help_flag = True
+        if not gui_flag:
+            help_flag = True
 
     if not help_flag:
-        for option_key in io_def["inputs"].keys():
-            if option_key not in options.keys():
-                if "default" in io_def["inputs"][option_key].keys():
-                    options[option_key] = io_def["inputs"][option_key]["default"]
-                elif "required" in io_def["inputs"][option_key].keys():
-                    if io_def["inputs"][option_key]["required"]:
-                        help_flag = True
-                        ehelp_msg = "Missing required option \"" + option_key +  "\", specified by"
-                        if "cli_arg" in io_def["inputs"][option_key]:
-                            ehelp_msg += " \"--" + io_def["inputs"][option_key]["cli_arg"] + " <value>\""
-                        if "cli_short" in io_def["inputs"][option_key]:
-                            ehelp_msg += " \"-" + io_def["inputs"][option_key]["cli_short"] + " <value>\""
-                        if "hint" in io_def["inputs"][option_key].keys():
-                            ehelp_msg += "\nHint: " + io_def["inputs"][option_key]["hint"]
+        if io_def is not None:
+            for option_key in io_def["inputs"].keys():
+                if option_key not in options.keys():
+                    if "default" in io_def["inputs"][option_key].keys():
+                        options[option_key] = io_def["inputs"][option_key]["default"]
+                    elif "required" in io_def["inputs"][option_key].keys():
+                        if io_def["inputs"][option_key]["required"]:
+                            help_flag = True
+                            ehelp_msg = "Missing required option \"" + option_key +  "\", specified by"
+                            if "cli_arg" in io_def["inputs"][option_key]:
+                                ehelp_msg += " \"--" + io_def["inputs"][option_key]["cli_arg"] + " <value>\""
+                            if "cli_short" in io_def["inputs"][option_key]:
+                                ehelp_msg += " \"-" + io_def["inputs"][option_key]["cli_short"] + " <value>\""
+                            if "hint" in io_def["inputs"][option_key].keys():
+                                ehelp_msg += "\nHint: " + io_def["inputs"][option_key]["hint"]
 
     if help_flag:
         print("")
@@ -167,46 +173,50 @@ if __name__ == "__main__":
         #print("    ifcbproc features <roi_file> [roi_file...] [-o <output_path>]")
         #print("")
     else:
-        job_start_time = time.time()
-        print("Preparing job...")
+        if gui_flag:
+            gui = SeaSTARGUI(python_file_loc=python_file_loc)
+            gui.enter_mainloop()
+        else:
+            job_start_time = time.time()
+            print("Preparing job...")
 
-        def prf(prop, etr):
-            bar_w = 32
-            bar_x = round(bar_w * prop)
-            bar_l = "#"*bar_x
-            bar_r = "_"*(bar_w - bar_x)
-            percent = f"{prop:.2%}"
-            secs = round(etr)
-            timestr = f"about {secs}s remaining..."
-            if secs < 3:
-                timestr = "only a few seconds remaining..."
+            def prf(prop, etr):
+                bar_w = 32
+                bar_x = round(bar_w * prop)
+                bar_l = "#"*bar_x
+                bar_r = "_"*(bar_w - bar_x)
+                percent = f"{prop:.2%}"
+                secs = round(etr)
+                timestr = f"about {secs}s remaining..."
+                if secs < 3:
+                    timestr = "only a few seconds remaining..."
+                if secs > 60:
+                    mins = math.floor(secs / 60)
+                    secs = secs - (mins * 60)
+                    timestr = f"about {mins}min {secs}s remaining..."
+                if secs > 3600:
+                    hrs = math.floor(mins / 60)
+                    mins = mins - (hrs * 60)
+                    timestr = f"about {hrs}hr {mins}min remaining..."
+
+                print(f"\r[{bar_l}{bar_r}] {percent} done, {timestr}                ", end="")
+
+            main_job_object = found_job_modules[command].MainJob(options, prf)
+            print("Processing...")
+            main_job_object.execute()
+            job_end_time = time.time()
+
+            secs = round(job_end_time - job_start_time)
+            timestr = f"{secs}s"
             if secs > 60:
                 mins = math.floor(secs / 60)
                 secs = secs - (mins * 60)
-                timestr = f"about {mins}min {secs}s remaining..."
+                timestr = f"{mins}min {secs}s"
             if secs > 3600:
                 hrs = math.floor(mins / 60)
                 mins = mins - (hrs * 60)
-                timestr = f"about {hrs}hr {mins}min remaining..."
+                timestr = f"{hrs}hr {mins}min"
 
-            print(f"\r[{bar_l}{bar_r}] {percent} done, {timestr}                ", end="")
-
-        main_job_object = found_job_modules[command].MainJob(options, prf)
-        print("Processing...")
-        main_job_object.execute()
-        job_end_time = time.time()
-
-        secs = round(job_end_time - job_start_time)
-        timestr = f"{secs}s"
-        if secs > 60:
-            mins = math.floor(secs / 60)
-            secs = secs - (mins * 60)
-            timestr = f"{mins}min {secs}s"
-        if secs > 3600:
-            hrs = math.floor(mins / 60)
-            mins = mins - (hrs * 60)
-            timestr = f"{hrs}hr {mins}min"
-
-        print(f"\rFinished in  {timestr}                                      ")
-        print("Done!")
+            print(f"\rFinished in  {timestr}                                      ")
+            print("Done!")
 
