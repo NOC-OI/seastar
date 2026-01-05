@@ -201,7 +201,7 @@ def base_cli():
                     mins = mins - (hrs * 60)
                     timestr = f"about {hrs}hr {mins}min remaining..."
 
-                print(f"\r[{bar_l}{bar_r}] {percent} done, {timestr}".ljust(80, " "), end="")
+                print(f"\r[{bar_l}{bar_r}] {percent} done, {timestr}".ljust(79, " "), end="")
 
             main_job_object = importlib.import_module(found_job_modules[command]).MainJob(options, prf)
             print("Processing...")
@@ -219,6 +219,6 @@ def base_cli():
                 mins = mins - (hrs * 60)
                 timestr = f"{hrs}hr {mins}min"
 
-            print(f"\rFinished in  {timestr}".ljust(80, " "))
+            print(f"\rFinished in  {timestr}".ljust(79, " "))
             print("Done!")
 

@@ -206,7 +206,10 @@ class IFCBEntryProvider:
         metadata_dict = list(csv.DictReader(csv_fd))
         dict_keys = metadata_dict[0].keys()
         can_join_dict = False
-        metadata_dict_info = {"data_keys": []}
+        metadata_dict_info = {
+                "data_keys": [],
+                "filename": csv_filename
+            }
         bin_id_regex = re.compile(r'D[0-9]{8}T[0-9]{6}_IFCB[0-9]+')
         if ("bin" in dict_keys) or ("filename" in dict_keys):
             can_join_dict = True
@@ -239,6 +242,8 @@ class IFCBEntryProvider:
                 self.ecotaxa_table_header[matched_ecotaxa_columns[column_index]] = matched_ecotaxa_types[column_index]
                 self.match_data_keys[matched_ecotaxa_columns[column_index]] = match_data_keys[column_index]
                 self.column_sources[matched_ecotaxa_columns[column_index]].append(metadata_dict_info)
+
+            print("CSV file " + csv_filename + " has " + str(len(metadata_dict_info["dict"])) + " rows")
 
     def __iter__(self):
         return self
@@ -321,14 +326,17 @@ class IFCBEntryProvider:
                             #for row in column_source["dict"]:
                             #    if int(row[column_source["roi_key_column"]]) == roi.index:
                             #        value = row[self.match_data_keys[ecotaxa_column]]
-                            row_index = column_source["roi_key_index"][roi.index]
-                            value = column_source["dict"][row_index][self.match_data_keys[ecotaxa_column]]
+                            try:
+                                row_index = column_source["roi_key_index"][roi.index]
+                                value = column_source["dict"][row_index][self.match_data_keys[ecotaxa_column]]
+                            except KeyError:
+                                print("KeyError on matching ROI " + str(roi.index) + " from bin " + self.ifcb_ids[self.reader_index] + " to row in CSV " + column_source["filename"])
                         if "bin_key_column" in column_source.keys():
                             for row in column_source["dict"]:
                                 if row[column_source["bin_key_column"]] == ifcb_bin:
                                     value = row[self.match_data_keys[ecotaxa_column]]
                 if value is None:
-                    print("ERROR, NO MATCH ON " + observation_id)
+                    print("ERROR, NO MATCH ON " + observation_id + "\n")
                 else:
                     record[ecotaxa_column] = value
 
