@@ -251,33 +251,16 @@ class IFCBEntryProvider:
     def __next__(self):
         if self.index < len(self.roi_readers[self.reader_index].rois):
             roi = self.roi_readers[self.reader_index].rois[self.index]
-            self.index += 1
-            if self.index >= len(self.roi_readers[self.reader_index].rois):
-                if self.reader_index < (len(self.roi_readers) - 1):
-                    self.reader_index += 1
-                    self.index = 0
             dt = datetime.strptime(self.ifcb_ids[self.reader_index].split("_")[0], "D%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
-
             observation_id = self.ifcb_ids[self.reader_index] + "_" + str(roi.index).zfill(5)
             ifcb_bin = self.ifcb_ids[self.reader_index]
-
-
-            extents = [(0, roi.array.shape[0]), (0, roi.array.shape[1])]
-            origin_extents = roi.array.shape
-
-            #print(roi.trigger.raw.keys())
-
             trigger_values = {}
             for key in roi.trigger.raw.keys():
                 trigger_values[key] = float(roi.trigger.raw[key])
-
-
             trigger_id = self.ifcb_ids[self.reader_index] + "_TN" + str(int(trigger_values["trigger_number"]))
             ifcb_sn = self.ifcb_ids[self.reader_index].split("_")[1][4:]
-
-            #print(json.dumps(list(trigger_values.keys()), indent=4))
-
-            #print(self.options)
+            extents = [(0, roi.array.shape[0]), (0, roi.array.shape[1])]
+            origin_extents = roi.array.shape
 
             record = {
                 "object_id": observation_id,
@@ -340,6 +323,12 @@ class IFCBEntryProvider:
                 else:
                     record[ecotaxa_column] = value
 
+            # Only advance indexes at the end!
+            self.index += 1
+            if self.index >= len(self.roi_readers[self.reader_index].rois):
+                if self.reader_index < (len(self.roi_readers) - 1):
+                    self.reader_index += 1
+                    self.index = 0
 
             if self.with_images:
                 record["img_file_name"] = observation_id + ".png"
