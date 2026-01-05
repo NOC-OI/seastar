@@ -36,7 +36,7 @@ class SeaSTARGUI():
         self.standard_ypad = 5
 
         self.head_text = tkinter.Label(self.root, text="Welcome to SeaSTAR! Start by selecting a job.")
-        self.head_Text.grid(column=0, columnspan=2, row=0, sticky="W", padx=self.standard_xpad, pady=self.standard_ypad)
+        self.head_text.grid(column=0, columnspan=2, row=0, sticky="W", padx=self.standard_xpad, pady=self.standard_ypad)
 
         #input_files_text = tkinter.scrolledtext.ScrolledText(self.root, width=8,  height=8)
         #input_files_text.grid(column=0, row=1, padx=standard_xpad, pady=standard_ypad, sticky="NSEW")

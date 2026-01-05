@@ -4,7 +4,6 @@ import os
 import json
 import time
 import math
-from .gui import SeaSTARGUI
 
 def base_cli():
     python_file_loc = os.path.dirname(os.path.realpath(__file__))
@@ -19,7 +18,7 @@ def base_cli():
                 with open(os.path.join(full_job_dir, "io.json"), "r") as io_json_fp:
                     module_io_defs[job_dir.name] = json.loads(io_json_fp.read())
                     #print("loading jobs." + job_dir.name)
-                    found_job_modules[job_dir.name] = importlib.import_module("seastartool.jobs." + job_dir.name)
+                    found_job_modules[job_dir.name] = "seastartool.jobs." + job_dir.name
                     #options = {}
                     #found_job_modules[job_dir.name].MainJob(options)
 
@@ -119,7 +118,7 @@ def base_cli():
                     help_flag = True
                     break
                 else:
-                    if arg in found_job_modules.keys():
+                    if arg in module_io_defs.keys():
                         io_def = module_io_defs[arg]
                         command = arg
                         ehelp_msg = None
@@ -176,6 +175,7 @@ def base_cli():
         #print("")
     else:
         if gui_flag:
+            from .gui import SeaSTARGUI # Avoid loading the GUI if the user doesn't want it!
             gui = SeaSTARGUI(python_file_loc=python_file_loc)
             gui.enter_mainloop()
         else:
@@ -183,7 +183,7 @@ def base_cli():
             print("Preparing job...")
 
             def prf(prop, etr):
-                bar_w = 32
+                bar_w = 16
                 bar_x = round(bar_w * prop)
                 bar_l = "#"*bar_x
                 bar_r = "_"*(bar_w - bar_x)
@@ -201,9 +201,9 @@ def base_cli():
                     mins = mins - (hrs * 60)
                     timestr = f"about {hrs}hr {mins}min remaining..."
 
-                print(f"\r[{bar_l}{bar_r}] {percent} done, {timestr}                ", end="")
+                print(f"\r[{bar_l}{bar_r}] {percent} done, {timestr}".ljust(80, " "), end="")
 
-            main_job_object = found_job_modules[command].MainJob(options, prf)
+            main_job_object = importlib.import_module(found_job_modules[command]).MainJob(options, prf)
             print("Processing...")
             main_job_object.execute()
             job_end_time = time.time()
@@ -219,6 +219,6 @@ def base_cli():
                 mins = mins - (hrs * 60)
                 timestr = f"{hrs}hr {mins}min"
 
-            print(f"\rFinished in  {timestr}                                      ")
+            print(f"\rFinished in  {timestr}".ljust(80, " "))
             print("Done!")
 
