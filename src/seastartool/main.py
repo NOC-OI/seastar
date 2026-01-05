@@ -4,9 +4,9 @@ import os
 import json
 import time
 import math
-from gui import SeaSTARGUI
+from .gui import SeaSTARGUI
 
-if __name__ == "__main__":
+def base_cli():
     python_file_loc = os.path.dirname(os.path.realpath(__file__))
 
     job_dirs = os.scandir(os.path.join(python_file_loc, "jobs"))
@@ -14,12 +14,14 @@ if __name__ == "__main__":
     module_io_defs = {}
     for job_dir in job_dirs:
         if job_dir.is_dir():
-            full_job_dir = os.path.join(python_file_loc, "jobs", job_dir.name)
-            with open(os.path.join(full_job_dir, "io.json"), "r") as io_json_fp:
-                module_io_defs[job_dir.name] = json.loads(io_json_fp.read())
-                found_job_modules[job_dir.name] = importlib.import_module("jobs." + job_dir.name)
-                #options = {}
-                #found_job_modules[job_dir.name].MainJob(options)
+            if not job_dir.name.startswith("__"):
+                full_job_dir = os.path.join(python_file_loc, "jobs", job_dir.name)
+                with open(os.path.join(full_job_dir, "io.json"), "r") as io_json_fp:
+                    module_io_defs[job_dir.name] = json.loads(io_json_fp.read())
+                    #print("loading jobs." + job_dir.name)
+                    found_job_modules[job_dir.name] = importlib.import_module("seastartool.jobs." + job_dir.name)
+                    #options = {}
+                    #found_job_modules[job_dir.name].MainJob(options)
 
 
 
@@ -38,7 +40,7 @@ if __name__ == "__main__":
     multiple_capture_switch = False
     options = {}
     io_def = None
-    gui_flag = True
+    gui_flag = False
 
     for arg in eargs:
         if arg.startswith("--"):
