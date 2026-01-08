@@ -31,6 +31,10 @@
             "semantic_type": "SWITCH"
         }
     },
+    "parallel": {
+        "enabled": true,
+        "type": "PRNG",
+    },
     "description": "Extracts morphological feature information from raw IFCB data. Is compatible with outputs of the V4 WHOI classifier.",
     "name": "IFCB feature extractor (WHOI v4 compatible)",
     "ui": [

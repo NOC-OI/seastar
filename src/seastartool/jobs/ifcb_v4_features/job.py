@@ -5,9 +5,11 @@ import time
 import csv
 
 class MainJob:
-    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s")):
+    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s"), log_function = lambda txt : print("[LOG] " + txt), error_function = lambda txt : print("[ERR] " + txt)):
         self.options = options
         self.report_progress = progress_reporting_function
+        self.log_function = log_function
+        self.error_function = error_function
 
         input_files_list = []
         for input_file_path in options["input_files"]:
@@ -26,7 +28,10 @@ class MainJob:
             ifcb_files.append(file_name)
 
 
+        self.log_function("Creating ROIReaders")
+
         for i in range(len(ifcb_files)):
+            self.log_function("Loading \"" + ifcb_files[i] + ".hdr\"")
             roi_readers.append(libifcb.ROIReader(ifcb_files[i] + ".hdr", ifcb_files[i] + ".adc", ifcb_files[i] + ".roi"))
 
         self.roi_readers = roi_readers
@@ -37,6 +42,7 @@ class MainJob:
             self.total_rois += len(roi_reader.rows)
 
     def generate_features_one_file(self, sample, source_file, bin_id, csv_file):
+        self.log_function("Processing \"" + source_file + ".roi\"")
         first = True
         feature_extractor = planktofeatures.extractors.WHOIVersion4()
         with open(csv_file, "w", newline="") as csvfile:

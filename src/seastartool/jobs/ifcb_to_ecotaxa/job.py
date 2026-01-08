@@ -8,11 +8,14 @@ import zipfile
 import io
 import time
 
+csv.field_size_limit(1024 * 1024 * 1024)
+
 class IFCBEntryProvider:
-    def __init__(self, roi_readers, ifcb_ids, with_images = True, options = {}):
+    def __init__(self, roi_readers, ifcb_ids, job_object, with_images = True, options = {}):
         self.roi_readers = roi_readers
         self.ifcb_ids = ifcb_ids
         self.with_images = with_images
+        self.job_object = job_object
         self.reader_index = 0
         self.index = 0
         self.options = options
@@ -192,14 +195,15 @@ class IFCBEntryProvider:
 
 
         if self.with_images:
-            print("With images!")
+            self.job_object.log_function("Creating EcoTaxa table for use alongside an image upload")
             self.ecotaxa_table_header["img_file_name"] = "[t]"
             self.ecotaxa_table_header["img_rank"] = "[f]"
+        else:
+            self.job_object.log_function("Creating EcoTaxa table only, without images")
 
         self.total_rois = 0
         for roi_reader in roi_readers:
             self.total_rois += len(roi_reader.rows)
-
 
 
     def add_csv_file(self, csv_fd, csv_filename):
@@ -243,7 +247,7 @@ class IFCBEntryProvider:
                 self.match_data_keys[matched_ecotaxa_columns[column_index]] = match_data_keys[column_index]
                 self.column_sources[matched_ecotaxa_columns[column_index]].append(metadata_dict_info)
 
-            print("CSV file " + csv_filename + " has " + str(len(metadata_dict_info["dict"])) + " rows")
+            self.job_object.log_function("Loading metadata file \"" + csv_filename + "\" with " + str(len(metadata_dict_info["dict"])) + " rows")
 
     def __iter__(self):
         return self
@@ -313,13 +317,13 @@ class IFCBEntryProvider:
                                 row_index = column_source["roi_key_index"][roi.index]
                                 value = column_source["dict"][row_index][self.match_data_keys[ecotaxa_column]]
                             except KeyError:
-                                print("KeyError on matching ROI " + str(roi.index) + " from bin " + self.ifcb_ids[self.reader_index] + " to row in CSV " + column_source["filename"])
+                                self.job_object.error_function("KeyError on matching ROI " + str(roi.index) + " from bin \"" + self.ifcb_ids[self.reader_index] + "\" to row in CSV \"" + column_source["filename"] + "\" for column \"" + ecotaxa_column + "\"")
                         if "bin_key_column" in column_source.keys():
                             for row in column_source["dict"]:
                                 if row[column_source["bin_key_column"]] == ifcb_bin:
                                     value = row[self.match_data_keys[ecotaxa_column]]
                 if value is None:
-                    print("ERROR, NO MATCH ON " + observation_id + "\n")
+                    self.job_object.error_function("MISSING SOME DATA FOR " + observation_id)
                 else:
                     record[ecotaxa_column] = value
 
@@ -348,10 +352,12 @@ class MainJob:
         remaining_time = time_per_roi * remaining_rois
         self.report_progress(proportion, remaining_time)
 
-    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s")):
+    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s"), log_function = lambda txt : print("[LOG] " + txt), error_function = lambda txt : print("[ERR] " + txt)):
 
         self.options = options
         self.report_progress = progress_reporting_function
+        self.log_function = log_function
+        self.error_function = error_function
 
         #print(options)
 
@@ -386,11 +392,14 @@ class MainJob:
         if len(ifcb_bins) == 0:
             raise RuntimeException("No IFCB bins supplied!")
 
+        self.log_function("Creating ROIReaders")
 
         for i in range(len(ifcb_files)):
+            self.log_function("Loading \"" + ifcb_files[i] + ".hdr\"")
             roi_readers.append(libifcb.ROIReader(ifcb_files[i] + ".hdr", ifcb_files[i] + ".adc", ifcb_files[i] + ".roi"))
 
-        self.entry_provider = IFCBEntryProvider(roi_readers, ifcb_bins, self.with_images, options)
+        self.log_function("Initialising entry provider")
+        self.entry_provider = IFCBEntryProvider(roi_readers, ifcb_bins, self, self.with_images, options)
 
         for csv_file in csv_files_list:
             self.entry_provider.add_csv_file(open(csv_file, "r"), csv_file)
