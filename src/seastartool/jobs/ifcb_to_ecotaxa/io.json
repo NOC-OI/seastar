@@ -134,5 +134,10 @@
             "cli_arg": "minesd",
             "hint": "EcoTaxa column: acq_min_esd"
         }
-    }
+    },
+    "parallel": {
+        "enabled": false
+    },
+    "description": "Creates EcoTaxa TSV or ZIP files for uploading images or updating metadata from raw IFCB data, and/or morphological feature files.",
+    "name": "EcoTaxa IFCB Data Import"
 }

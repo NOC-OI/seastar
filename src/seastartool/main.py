@@ -9,7 +9,7 @@ def base_cli():
     python_file_loc = os.path.dirname(os.path.realpath(__file__))
 
     job_dirs = os.scandir(os.path.join(python_file_loc, "jobs"))
-    found_job_modules = {}
+    #found_job_modules = {}
     module_io_defs = {}
     for job_dir in job_dirs:
         if job_dir.is_dir():
@@ -18,7 +18,7 @@ def base_cli():
                 with open(os.path.join(full_job_dir, "io.json"), "r") as io_json_fp:
                     module_io_defs[job_dir.name] = json.loads(io_json_fp.read())
                     #print("loading jobs." + job_dir.name)
-                    found_job_modules[job_dir.name] = "seastartool.jobs." + job_dir.name
+                    module_io_defs[job_dir.name]["job_module"] = "seastartool.jobs." + job_dir.name
                     #options = {}
                     #found_job_modules[job_dir.name].MainJob(options)
 
@@ -176,7 +176,7 @@ def base_cli():
     else:
         if gui_flag:
             from .gui import SeaSTARGUI # Avoid loading the GUI if the user doesn't want it!
-            gui = SeaSTARGUI(python_file_loc=python_file_loc)
+            gui = SeaSTARGUI(python_file_loc=python_file_loc, module_io_defs=module_io_defs)
             gui.enter_mainloop()
         else:
             job_start_time = time.time()
@@ -203,7 +203,7 @@ def base_cli():
 
                 print(f"\r[{bar_l}{bar_r}] {percent} done, {timestr}".ljust(79, " "), end="")
 
-            main_job_object = importlib.import_module(found_job_modules[command]).MainJob(options, prf)
+            main_job_object = importlib.import_module(module_io_defs[command]["job_module"]).MainJob(options, prf)
             print("Processing...")
             main_job_object.execute()
             job_end_time = time.time()
