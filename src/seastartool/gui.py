@@ -20,6 +20,7 @@ import tkinter
 import tkinter.filedialog
 import tkinter.messagebox
 import tkinter.scrolledtext
+import tkinter.font
 import os
 
 class SeaSTARGUI():
@@ -49,6 +50,8 @@ class SeaSTARGUI():
         self.root.columnconfigure(index=0, weight=1)
         #self.root.rowconfigure(index=1, weight=2)
 
+        self.default_font = tkinter.font.nametofont("TkDefaultFont").actual()
+
         self.standard_xpad = 5
         self.standard_ypad = 5
 
@@ -56,27 +59,64 @@ class SeaSTARGUI():
         self.head_text[0].grid(column=0, row=0, sticky="ew", padx=self.standard_xpad * 2, pady=self.standard_ypad)
 
 
+        def create_job_onclick_function(hlframe,io_def):
+            def closure(event):
+                print("Clicked! " + io_def["name"])
+                hlframe.config(relief=tkinter.SUNKEN)
+            return closure
+
+        def create_job_onenter_function(hlframe):
+            def closure(event):
+                hlframe.config(relief=tkinter.RAISED)
+            return closure
+
+        def create_job_onleave_function(hlframe):
+            def closure(event):
+                hlframe.config(relief=tkinter.GROOVE)
+            return closure
+
         row_index = 0
         for io_def_key in module_io_defs.keys():
             print(io_def_key)
             io_def = module_io_defs[io_def_key]
+
             row_index += 1
             job_frame = tkinter.Frame(self.root, borderwidth=2, relief=tkinter.GROOVE)
             job_frame.grid(column=0, row=row_index, sticky="ew", padx=self.standard_xpad * 2, pady=self.standard_ypad)
             job_frame.columnconfigure(index=0, weight=1)
             job_frame.columnconfigure(index=1, weight=0)
 
+            onclick_function = create_job_onclick_function(job_frame,io_def)
+            onenter_function = create_job_onenter_function(job_frame)
+            onleave_function = create_job_onleave_function(job_frame)
+            job_frame.bind("<Button-1>", onclick_function)
+            job_frame.bind("<Enter>", onenter_function)
+            job_frame.bind("<Leave>", onleave_function)
+
             if "name" not in io_def.keys():
                 io_def["name"] = io_def_key
 
             name_label = self.__create_scrollable_standard_label(job_frame, io_def["name"])
             name_label[0].grid(column=0, row=0, sticky="ew", padx=self.standard_xpad, pady=self.standard_ypad)
+            name_label[0].bind("<Button-1>", onclick_function)
+            name_label[0].bind("<Enter>", onenter_function)
+            name_label[0].bind("<Leave>", onleave_function)
+            name_label[1].bind("<Button-1>", onclick_function)
+            name_label[1].bind("<Enter>", onenter_function)
+            name_label[1].bind("<Leave>", onleave_function)
+            name_label[1].config(font=(self.default_font["family"], self.default_font["size"], "bold"))
 
             if "description" not in io_def.keys():
                 io_def["description"] = "This job is missing a description!"
 
             description_label = self.__create_scrollable_standard_label(job_frame, io_def["description"])
             description_label[0].grid(column=0, row=1, sticky="ew", padx=self.standard_xpad, pady=self.standard_ypad)
+            description_label[0].bind("<Button-1>", onclick_function)
+            description_label[0].bind("<Enter>", onenter_function)
+            description_label[0].bind("<Leave>", onleave_function)
+            description_label[1].bind("<Button-1>", onclick_function)
+            description_label[1].bind("<Enter>", onenter_function)
+            description_label[1].bind("<Leave>", onleave_function)
 
 
 
