@@ -5,6 +5,7 @@ import json
 import time
 import math
 import textwrap
+import glob
 
 long_help_text = """
 seastar --gui                           Launch the SeaSTAR graphical user interface
@@ -195,6 +196,7 @@ def base_cli():
                 print("    " + text_wrapper.fill(text=description).replace("\n", "\n    "))
                 print("")
         else:
+
             io_def = module_io_defs[command]
             title = io_def["name"]
             description = io_def["description"]
@@ -220,6 +222,8 @@ def base_cli():
                 input_sig_ed = "<text>"
                 if semantic_type == "MULTIPLE_FILES":
                     input_sig_ed = "<file> [file [...]]"
+                if semantic_type == "SINGLE_FILE":
+                    input_sig_ed = "<file>"
                 elif semantic_type == "SINGLE_FOLDER":
                     input_sig_ed = "<folder>"
                 elif semantic_type == "SWITCH":
@@ -237,6 +241,26 @@ def base_cli():
                 input_str_def = input_sig.ljust(40, " ") + input_tail_lines
                 print(input_str_def)
     else:
+        for option_key in options.keys():
+            input_def = module_io_defs[command]["inputs"][option_key]
+            if "semantic_type" in input_def.keys():
+                #print(option_key + " is " + input_def["semantic_type"])
+                if input_def["semantic_type"] == "MULTIPLE_FILES":
+                    if "multiple" in input_def.keys():
+                        if input_def["multiple"]:
+                            new_option_arr = []
+                            for input_str in options[option_key]:
+                                new_option_arr = new_option_arr + glob.glob(input_str)
+
+                            #print("GLOB RECONSTRUCTION TRIGGER")
+                            #print(options[option_key])
+                            #print(new_option_arr)
+
+                            options[option_key] = new_option_arr
+
+
+
+
         if gui_flag:
             from .gui import SeaSTARGUI # Avoid loading the GUI if the user doesn't want it!
             gui = SeaSTARGUI(python_file_loc=python_file_loc, module_io_defs=module_io_defs)
@@ -244,6 +268,7 @@ def base_cli():
             gui.render_start_page()
             gui.enter_mainloop()
         else:
+
             job_start_time = time.time()
             print("Preparing job...")
 

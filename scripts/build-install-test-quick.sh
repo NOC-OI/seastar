@@ -4,4 +4,4 @@ cd $SCRIPT_DIR
 cd ..
 bash scripts/build-install.sh
 
-seastar ifcb_to_ecotaxa -i testdata/*.hdr testdata/*.csv testmetadata/static_metadata.csv --operator "Placeholder Name" --project "Test Project" --ship "Very Nice Ship" --depth 5 --tableonly -o testout/ecotaxa_test.tsv
+seastar ifcb_to_ecotaxa -i "testdata/*.hdr" testdata/*.csv testmetadata/static_metadata.csv --operator "Placeholder Name" --project "Test Project" --ship "Very Nice Ship" --depth 5 --tableonly -o testout/ecotaxa_test.tsv

@@ -13,14 +13,16 @@
             "cli_arg": "input",
             "cli_short": "i",
             "required": true,
-            "hint": "Input IFCB files and feature files (roi, adc, hdr, csv)"
+            "hint": "Input IFCB files and feature files (roi, adc, hdr, csv)",
+            "semantic_type": "MULTIPLE_FILES"
         },
         "output_file": {
             "type": "STRING",
             "cli_arg": "output",
             "cli_short": "o",
             "required": true,
-            "hint": "Output zip or tsv file"
+            "hint": "Output zip or tsv file",
+            "semantic_type": "SINGLE_FILE"
         },
         "ignore_before": {
             "type": "STRING",
