@@ -13,7 +13,7 @@ class MainJob:
 
         input_files_list = []
         for input_file_path in options["input_files"]:
-            input_files_list.append(os.path.realpath(input_file_path))
+            input_files_list.append(os.path.abspath(input_file_path))
 
         ifcb_bins = []
         ifcb_files = []
