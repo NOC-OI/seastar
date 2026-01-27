@@ -23,6 +23,55 @@ import tkinter.scrolledtext
 import tkinter.font
 import os
 
+class ScrollableFrame(tkinter.Frame):
+    def _on_mousewheel(self, event):
+        # Linux uses Button-4 and Button-5, Windows/Mac use MouseWheel
+        if event.num == 4: # Linux scroll up
+            self.canvas.yview_scroll(-1, "units")
+        elif event.num == 5: # Linux scroll down
+            self.canvas.yview_scroll(1, "units")
+        else: # Windows and MacOS
+            self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+    def bind_mouse_wheel(self, widget):
+        """Recursively bind mouse wheel to a widget and all its children."""
+        # Support for Windows/MacOS
+        widget.bind("<MouseWheel>", self._on_mousewheel)
+        # Support for Linux
+        widget.bind("<Button-4>", self._on_mousewheel)
+        widget.bind("<Button-5>", self._on_mousewheel)
+
+        for child in widget.winfo_children():
+            self.bind_mouse_wheel(child)
+
+    def __init__(self, container, *args, **kwargs):
+        super().__init__(container, *args, **kwargs)
+
+        # 1. Create a canvas object and a vertical scrollbar
+        self.canvas = tkinter.Canvas(self)
+        self.scrollbar = tkinter.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+
+        # 2. Create the frame that will hold the actual content
+        self.scrollable_content = tkinter.Frame(self.canvas)
+
+        # 3. Bind the configuration of the internal frame to the canvas scroll region
+        self.scrollable_content.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+
+        # 4. Create a window inside the canvas to house the internal frame
+        self.canvas.create_window((0, 0), window=self.scrollable_content, anchor="nw")
+
+        # 5. Link the canvas to the scrollbar
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # 6. Pack everything
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+        #self.canvas.bind_all("<MouseWheel>", lambda e: self.canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+
 class SeaSTARGUI():
     def __set_dynamic_reflow(self, widget):
         widget.master.bind("<Configure>", self.__get_reflow_closure(widget))
@@ -41,20 +90,29 @@ class SeaSTARGUI():
 
         return (container, label)
 
-    def __init__(self, python_file_loc="", module_io_defs={}):
-        self.root = tkinter.Tk()
+    def render_job_form(self, job_name):
+        for widget in self.root.winfo_children():
+            widget.destroy()
 
-        self.root.title("SeaSTAR")
-        self.root.geometry("600x400")
-        self.root.iconphoto(False, tkinter.PhotoImage(file=os.path.join(python_file_loc, "icon.png")))
         self.root.columnconfigure(index=0, weight=1)
-        #self.root.rowconfigure(index=1, weight=2)
+        self.root.rowconfigure(index=1, weight=1)
+        self.head_text = self.__create_scrollable_standard_label(self.root, job_name)
+        self.head_text[0].grid(column=0, row=0, sticky="ew", padx=self.standard_xpad * 2, pady=self.standard_ypad)
 
-        self.default_font = tkinter.font.nametofont("TkDefaultFont").actual()
+        self.main_scrollable_frame = ScrollableFrame(self.root)
+        self.main_scrollable_frame.grid(column=0, row=1, sticky="nsew", padx=0, pady=0)
 
-        self.standard_xpad = 5
-        self.standard_ypad = 5
+        for i in range(50):
+            tkinter.Label(self.main_scrollable_frame.scrollable_content, text=f"This is item number {i}").pack(pady=5)
 
+        self.main_scrollable_frame.bind_mouse_wheel(self.main_scrollable_frame.scrollable_content)
+
+        #testtext = self.__create_scrollable_standard_label(self.main_scrollable_frame.scrollable_content, "Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.")
+
+
+
+    def render_start_page(self):
+        self.root.columnconfigure(index=0, weight=1)
         self.head_text = self.__create_scrollable_standard_label(self.root, "Welcome to SeaSTAR! Start by selecting a job.")
         self.head_text[0].grid(column=0, row=0, sticky="ew", padx=self.standard_xpad * 2, pady=self.standard_ypad)
 
@@ -62,7 +120,8 @@ class SeaSTARGUI():
         def create_job_onclick_function(hlframe,io_def):
             def closure(event):
                 print("Clicked! " + io_def["name"])
-                hlframe.config(relief=tkinter.SUNKEN)
+                self.render_job_form(io_def_key)
+                #hlframe.config(relief=tkinter.SUNKEN)
             return closure
 
         def create_job_onenter_function(hlframe):
@@ -76,9 +135,9 @@ class SeaSTARGUI():
             return closure
 
         row_index = 0
-        for io_def_key in module_io_defs.keys():
+        for io_def_key in self.module_io_defs.keys():
             print(io_def_key)
-            io_def = module_io_defs[io_def_key]
+            io_def = self.module_io_defs[io_def_key]
 
             row_index += 1
             job_frame = tkinter.Frame(self.root, borderwidth=2, relief=tkinter.GROOVE)
@@ -118,36 +177,19 @@ class SeaSTARGUI():
             description_label[1].bind("<Enter>", onenter_function)
             description_label[1].bind("<Leave>", onleave_function)
 
+    def __init__(self, python_file_loc="", module_io_defs={}):
+        self.root = tkinter.Tk()
+
+        self.root.title("SeaSTAR")
+        self.root.geometry("600x400")
+        self.root.iconphoto(False, tkinter.PhotoImage(file=os.path.join(python_file_loc, "icon.png")))
+        self.default_font = tkinter.font.nametofont("TkDefaultFont").actual()
+        self.standard_xpad = 5
+        self.standard_ypad = 5
+        self.module_io_defs = module_io_defs
+        self.python_file_loc = python_file_loc
 
 
-
-        #input_files_text = tkinter.scrolledtext.ScrolledText(self.root, width=8,  height=8)
-        #input_files_text.grid(column=0, row=1, padx=standard_xpad, pady=standard_ypad, sticky="NSEW")
-        #input_files_text.configure(state ='disabled')
-
-        #def button_execute_onclick():
-        #    label.configure(text="Choose files...")#
-
-        #    valid_filetypes = (
-        #        ('IFCB files', '*.roi *.adc *.hdr'),
-        #        ('Image files', '*.png *.jpg *.jpeg *.tif *.tiff')
-        #    )
-
-        #    selected_files = tkinter.filedialog.askopenfilenames(
-        #        title='Select input files for processing',
-        #        filetypes=valid_filetypes)
-
-            #tkinter.messagebox.showinfo(
-            #    title='Selected files!',
-            #    message="Test"
-            #)
-
-            #label.configure(text=", ".join(selected_files))
-        #    input_files_text.configure(state="normal")
-        #    input_files_text.insert(tkinter.INSERT, "\n".join(selected_files))
-        #    input_files_text.configure(state="disabled")
-
-        #fg="red",
 
         #button = tkinter.Button(self.root, text="Select files", command=button_execute_onclick)
         #button.grid(column=1, row=1, sticky="SEW", padx=standard_xpad, pady=standard_ypad)

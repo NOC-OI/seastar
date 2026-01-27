@@ -240,6 +240,8 @@ def base_cli():
         if gui_flag:
             from .gui import SeaSTARGUI # Avoid loading the GUI if the user doesn't want it!
             gui = SeaSTARGUI(python_file_loc=python_file_loc, module_io_defs=module_io_defs)
+
+            gui.render_start_page()
             gui.enter_mainloop()
         else:
             job_start_time = time.time()
