@@ -1,0 +1,33 @@
+{
+    "inputs": {
+        "input_files": {
+            "type": "STRING",
+            "multiple": true,
+            "cli_arg": "input",
+            "cli_short": "i",
+            "required": true,
+            "hint": "Input EcoTaxa TSV and image files",
+            "semantic_type": "MULTIPLE_FILES"
+        },
+        "annotation_file": {
+            "type": "STRING",
+            "cli_arg": "annotout",
+            "cli_short": "o",
+            "required": true,
+            "hint": "Output CRAB annotation file",
+            "semantic_type": "SINGLE_FILE"
+        },
+        "data_file": {
+            "type": "STRING",
+            "cli_arg": "dataout",
+            "required": false,
+            "hint": "Output CRAB image data file, this may be omitted if images are not required in the output",
+            "semantic_type": "SINGLE_FILE"
+        }
+    },
+    "parallel": {
+        "enabled": false
+    },
+    "description": "Creates CRAB compatible parquet files for uploading images or updating annotations in CRAB.",
+    "name": "EcoTaxa to CRAB compatible upload"
+}

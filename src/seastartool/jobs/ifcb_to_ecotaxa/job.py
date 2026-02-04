@@ -23,6 +23,15 @@ class IFCBEntryProvider:
         self.match_data_keys = {}
         self.process_time = datetime.now().replace(tzinfo=timezone.utc)
 
+        self.mangle_nulls = False
+        self.allow_short_names = False
+
+        if "mangle_nulls" in self.options.keys():
+            self.mangle_nulls = self.options["mangle_nulls"]
+
+        if "allow_short_names" in self.options.keys():
+            self.allow_short_names = self.options["allow_short_names"]
+
         self.ecotaxa_table_header = {
                 "object_id": "[t]",
                 "object_date": "[t]",
@@ -142,8 +151,6 @@ class IFCBEntryProvider:
         if "project_name" in self.options.keys():
             self.static_additions["sample_project"] = self.options["project_name"]
             self.ecotaxa_table_header["sample_project"] = "[t]"
-
-
         if "station_id" in self.options.keys():
             self.static_additions["sample_stationid"] = self.options["station_id"]
             self.ecotaxa_table_header["sample_stationid"] = "[t]"
@@ -169,6 +176,9 @@ class IFCBEntryProvider:
             self.static_additions["sample_dilution_factor"] = self.options["dilution_factor"]
             self.ecotaxa_table_header["sample_dilution_factor"] = "[f]"
         if "operator_name" in self.options.keys():
+            if not self.allow_short_names:
+                if len(self.options["operator_name"]) < 5:
+                    raise RuntimeError("Are you sure \"" + self.options["operator_name"] + "\" is a full name? To force allowing names shorter than 5 characters, use the option \"--reallyignoreshortnames\"")
             self.static_additions["sample_operator"] = self.options["operator_name"]
             self.ecotaxa_table_header["sample_operator"] = "[t]"
         if "dilution_method" in self.options.keys():
@@ -192,6 +202,18 @@ class IFCBEntryProvider:
         if "um_per_pixel" in self.options.keys():
             self.static_additions["process_pixel_um"] = self.options["um_per_pixel"]
             self.ecotaxa_table_header["process_pixel_um"] = "[f]"
+        if "sample_depth" in self.options.keys():
+            self.static_additions["sample_depth_min"] = self.options["sample_depth"]
+            self.ecotaxa_table_header["sample_depth_min"] = "[f]"
+            self.static_additions["sample_depth_max"] = self.options["sample_depth"]
+            self.ecotaxa_table_header["sample_depth_max"] = "[f]"
+        if "meta_qc_by" in self.options.keys():
+            if not self.allow_short_names:
+                if len(self.options["meta_qc_by"]) < 5:
+                    raise RuntimeError("Are you sure \"" + self.options["meta_qc_by"] + "\" is a full name? To force allowing names shorter than 5 characters, use the option \"--reallyignoreshortnames\"")
+            self.static_additions["sample_meta_qc_by"] = self.options["meta_qc_by"]
+            self.ecotaxa_table_header["sample_meta_qc_by"] = "[t]"
+
 
 
         if self.with_images:
@@ -322,8 +344,16 @@ class IFCBEntryProvider:
                             for row in column_source["dict"]:
                                 if row[column_source["bin_key_column"]] == ifcb_bin:
                                     value = row[self.match_data_keys[ecotaxa_column]]
+                if value is "":
+                    value = None # Treat empty data cells as null
                 if value is None:
                     self.job_object.error_function("MISSING SOME DATA FOR " + observation_id)
+                    if self.mangle_nulls:
+                        if self.ecotaxa_table_header[ecotaxa_column] == "[t]":
+                            record[ecotaxa_column] = "None"
+                        else:
+                            record[ecotaxa_column] = "-99999999"
+
                 else:
                     record[ecotaxa_column] = value
 

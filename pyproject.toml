@@ -30,6 +30,7 @@ Issues = "https://github.com/NOC-OI/seastar/issues"
 packages = [
   "seastartool",
   "seastartool.jobs",
+  "seastartool.jobs.ecotaxa_to_crab",
   "seastartool.jobs.ifcb_to_ecotaxa",
   "seastartool.jobs.ifcb_v4_features"
 ]

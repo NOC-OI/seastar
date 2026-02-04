@@ -68,6 +68,21 @@
             "cli_arg": "tableonly",
             "hint": "Output just a tsv file, without image data"
         },
+        "mangle_nulls": {
+            "type": "BOOLEAN",
+            "cli_arg": "nonull",
+            "hint": "Replace null or missing data with the number -99999999 or the string \"None\""
+        },
+        "allow_short_names": {
+            "type": "BOOLEAN",
+            "cli_arg": "reallyignoreshortnames",
+            "hint": "Bypasses the check for abbreviated/shortened names"
+        },
+        "meta_qc_by": {
+            "type": "STRING",
+            "cli_arg": "qcdby",
+            "hint": "Adds the EcoTaxa column \"sample_meta_qc_by\", used for attributing the source of verified metadata"
+        },
         "station_id": {
             "type": "STRING",
             "cli_arg": "stationid"
