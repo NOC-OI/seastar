@@ -230,46 +230,49 @@ class IFCBEntryProvider:
 
     def add_csv_file(self, csv_fd, csv_filename):
         metadata_dict = list(csv.DictReader(csv_fd))
-        dict_keys = metadata_dict[0].keys()
-        can_join_dict = False
-        metadata_dict_info = {
-                "data_keys": [],
-                "filename": csv_filename
-            }
-        bin_id_regex = re.compile(r'D[0-9]{8}T[0-9]{6}_IFCB[0-9]+')
-        if ("bin" in dict_keys) or ("filename" in dict_keys):
-            can_join_dict = True
-            metadata_dict_info["bin_key_column"] = "filename"
-            if "bin" in dict_keys:
-                metadata_dict_info["bin_key_column"] = "bin"
-        if ("roi_number" in dict_keys):
-            can_join_dict = True
-            metadata_dict_info["roi_key_column"] = "roi_number"
-            result = bin_id_regex.search(csv_filename)
-            metadata_dict_info["bin_match"] = result.group()
-            metadata_dict_info["roi_key_index"] = {}
-            for row_index in range(len(metadata_dict)):
-                metadata_dict_info["roi_key_index"][int(metadata_dict[row_index][metadata_dict_info["roi_key_column"]])] = row_index
-        if can_join_dict:
-            metadata_dict_info["dict"] = metadata_dict
-            matched_ecotaxa_columns = []
-            matched_ecotaxa_types = []
-            match_data_keys = []
+        if len(metadata_dict) > 0:
+            dict_keys = metadata_dict[0].keys()
+            can_join_dict = False
+            metadata_dict_info = {
+                    "data_keys": [],
+                    "filename": csv_filename
+                }
+            bin_id_regex = re.compile(r'D[0-9]{8}T[0-9]{6}_IFCB[0-9]+')
+            if ("bin" in dict_keys) or ("filename" in dict_keys):
+                can_join_dict = True
+                metadata_dict_info["bin_key_column"] = "filename"
+                if "bin" in dict_keys:
+                    metadata_dict_info["bin_key_column"] = "bin"
+            if ("roi_number" in dict_keys):
+                can_join_dict = True
+                metadata_dict_info["roi_key_column"] = "roi_number"
+                result = bin_id_regex.search(csv_filename)
+                metadata_dict_info["bin_match"] = result.group()
+                metadata_dict_info["roi_key_index"] = {}
+                for row_index in range(len(metadata_dict)):
+                    metadata_dict_info["roi_key_index"][int(metadata_dict[row_index][metadata_dict_info["roi_key_column"]])] = row_index
+            if can_join_dict:
+                metadata_dict_info["dict"] = metadata_dict
+                matched_ecotaxa_columns = []
+                matched_ecotaxa_types = []
+                match_data_keys = []
 
-            for candidate_key in self.key_translations.keys():
-                if candidate_key in dict_keys:
-                    match_data_keys.append(candidate_key)
-                    matched_ecotaxa_types.append(self.key_translations[candidate_key][0])
-                    matched_ecotaxa_columns.append(self.key_translations[candidate_key][1])
+                for candidate_key in self.key_translations.keys():
+                    if candidate_key in dict_keys:
+                        match_data_keys.append(candidate_key)
+                        matched_ecotaxa_types.append(self.key_translations[candidate_key][0])
+                        matched_ecotaxa_columns.append(self.key_translations[candidate_key][1])
 
-            for column_index in range(len(matched_ecotaxa_columns)):
-                if matched_ecotaxa_columns[column_index] not in self.column_sources.keys():
-                    self.column_sources[matched_ecotaxa_columns[column_index]] = []
-                self.ecotaxa_table_header[matched_ecotaxa_columns[column_index]] = matched_ecotaxa_types[column_index]
-                self.match_data_keys[matched_ecotaxa_columns[column_index]] = match_data_keys[column_index]
-                self.column_sources[matched_ecotaxa_columns[column_index]].append(metadata_dict_info)
+                for column_index in range(len(matched_ecotaxa_columns)):
+                    if matched_ecotaxa_columns[column_index] not in self.column_sources.keys():
+                        self.column_sources[matched_ecotaxa_columns[column_index]] = []
+                    self.ecotaxa_table_header[matched_ecotaxa_columns[column_index]] = matched_ecotaxa_types[column_index]
+                    self.match_data_keys[matched_ecotaxa_columns[column_index]] = match_data_keys[column_index]
+                    self.column_sources[matched_ecotaxa_columns[column_index]].append(metadata_dict_info)
 
-            self.job_object.log_function("Loading metadata file \"" + csv_filename + "\" with " + str(len(metadata_dict_info["dict"])) + " rows")
+                self.job_object.log_function("Loading metadata file \"" + csv_filename + "\" with " + str(len(metadata_dict_info["dict"])) + " rows")
+        else:
+            self.job_object.log_function("Skipping metadata file \"" + csv_filename + "\" with zero rows")
 
     def __iter__(self):
         return self
@@ -347,7 +350,7 @@ class IFCBEntryProvider:
                 if value is "":
                     value = None # Treat empty data cells as null
                 if value is None:
-                    self.job_object.error_function("MISSING SOME DATA FOR " + observation_id)
+                    self.job_object.error_function("Missing data for ROI " + observation_id + " for column \"" + ecotaxa_column + "\"")
                     if self.mangle_nulls:
                         if self.ecotaxa_table_header[ecotaxa_column] == "[t]":
                             record[ecotaxa_column] = "None"
