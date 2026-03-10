@@ -5,14 +5,22 @@ import json
 import time
 import math
 import textwrap
+import datetime
 import glob
 
 long_help_text = """
-seastar --gui                           Launch the SeaSTAR graphical user interface
+seastar --gui                           Launch the SeaSTAR GUI
 seastar <job_name> [flags]              General structure
+
+With any SeaSTAR job you can use --logfile <file_path> to send all log output
+to a file in addition to the console. This log output will also include the date
+and time, along with all arguments used to invoke SeaSTAR.
 """
 
 def base_cli():
+    global last_line_terminated
+    last_line_terminated = True
+
     python_file_loc = os.path.dirname(os.path.realpath(__file__))
 
     job_dirs = os.scandir(os.path.join(python_file_loc, "jobs"))
@@ -49,6 +57,7 @@ def base_cli():
     options = {}
     io_def = None
     gui_flag = False
+    logfile_path = None
 
     for arg in eargs:
         if arg.startswith("--"):
@@ -62,6 +71,9 @@ def base_cli():
                 break
             if arg == "--gui":
                 gui_flag = True
+            elif arg == "--logfile":
+                mode_stack.append(mode)
+                mode = "logfile_capture"
             else:
                 option_recognised = False
                 if io_def is not None:
@@ -143,6 +155,9 @@ def base_cli():
                 options[capture_option] = capture_heap
             elif mode == "single_capture":
                 options[capture_option] = arg
+                mode = mode_stack.pop()
+            elif mode == "logfile_capture":
+                logfile_path = arg
                 mode = mode_stack.pop()
 
     if command is None:
@@ -270,7 +285,14 @@ def base_cli():
         else:
 
             job_start_time = time.time()
-            print("Preparing job...")
+
+            logfile_fh = None
+
+            if logfile_path is not None:
+                logfile_fh = open(logfile_path, "a")
+                curr_datetime = datetime.datetime.now(datetime.UTC)
+                logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] SeaSTAR invoked with following command\n")
+                logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + " ".join(sys.argv[1:]) + "\n")
 
             def prf(prop, etr):
                 bar_w = 16
@@ -293,8 +315,29 @@ def base_cli():
 
                 print(f"\r[{bar_l}{bar_r}] {percent} done, {timestr}".ljust(79, " "), end="")
 
-            main_job_object = importlib.import_module(module_io_defs[command]["job_module"]).MainJob(options, prf)
-            print("Processing...")
+            def log_function(txt):
+                if last_line_terminated:
+                    print("[LOG] " + txt)
+                else:
+                    print("\n[LOG] " + txt, end="")
+                if logfile_fh is not None:
+                    curr_datetime = datetime.datetime.now(datetime.UTC)
+                    logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + txt + "\n")
+
+            def error_function(txt, err_level):
+                if last_line_terminated:
+                    print("[ERR] " + txt)
+                else:
+                    print("\n[ERR] " + txt, end="")
+                if logfile_fh is not None:
+                    curr_datetime = datetime.datetime.now(datetime.UTC)
+                    logfile_fh.write("[ERR - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + txt + "\n")
+
+            log_function("Preparing job...")
+
+            main_job_object = importlib.import_module(module_io_defs[command]["job_module"]).MainJob(options, prf, log_function, error_function)
+            log_function("Starting main processing script...")
+            last_line_terminated = False
             main_job_object.execute()
             job_end_time = time.time()
 
@@ -309,6 +352,11 @@ def base_cli():
                 mins = mins - (hrs * 60)
                 timestr = f"{hrs}hr {mins}min"
 
-            print(f"\rFinished in  {timestr}".ljust(79, " "))
-            print("Done!")
+            log_function(f"Finished in  {timestr}".ljust(79, " "))
+            last_line_terminated = True
+            print("")
+            log_function("Done!")
+
+            if logfile_fh is not None:
+                logfile_fh.close()
 

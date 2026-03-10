@@ -73,6 +73,16 @@
             "cli_arg": "nonull",
             "hint": "Replace null or missing data with the number -99999999 or the string \"None\""
         },
+        "exclude_broken_blobs": {
+            "type": "BOOLEAN",
+            "cli_arg": "cleanblobs",
+            "hint": "Only include ROIs that have corresponding blobs that meet threshold criteria (less than 16 pixels major axis or blob covers whole ROI area)"
+        },
+        "add_scale_bar": {
+            "type": "BOOLEAN",
+            "cli_arg": "scalebars",
+            "hint": "Imprint a scale bar into output images"
+        },
         "allow_short_names": {
             "type": "BOOLEAN",
             "cli_arg": "reallyignoreshortnames",

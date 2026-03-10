@@ -297,7 +297,7 @@ class IFCBEntryProvider:
                 "object_time":  dt.strftime("%H:%M:%S"),
                 "object_roi_width": int(trigger_values["roi_width"]),
                 "object_roi_height": int(trigger_values["roi_height"]),
-                "process_id": None,
+                "process_id": ifcb_bin,
                 "process_date": self.process_time.strftime("%Y-%m-%d"),
                 "process_time": self.process_time.strftime("%H:%M:%S"),
                 "acq_id": trigger_id,
@@ -385,7 +385,7 @@ class MainJob:
         remaining_time = time_per_roi * remaining_rois
         self.report_progress(proportion, remaining_time)
 
-    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s"), log_function = lambda txt : print("[LOG] " + txt), error_function = lambda txt : print("[ERR] " + txt)):
+    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s"), log_function = lambda txt : print("[LOG] " + txt), error_function = lambda txt, err_level : print("[ERR] " + txt)):
 
         self.options = options
         self.report_progress = progress_reporting_function
@@ -442,6 +442,7 @@ class MainJob:
     def execute(self):
         self.first_time = time.time()
         self.currently_processing = 0
+        self.transferred_rois = 0
         self.last_time = time.time()
 
         if self.with_images:
@@ -476,6 +477,7 @@ class MainJob:
                     imbytes = imbuffer.getvalue()
                     running_compressed_size += len(imbytes)
                     out_zip.writestr(container + "/" + entry[0]["img_file_name"], imbytes)
+                    self.transferred_rois += 1
 
                     if (self.currently_processing % 512) == 0:
                         self.calc_progress_report()
@@ -497,6 +499,8 @@ class MainJob:
 
             out_zip.writestr(container + "/ecotaxa_" + tsv_name_suffix + ".tsv", ecotaxa_md.getvalue())
             out_zip.close()
+
+            self.log_function("Saved " + str(self.transferred_rois) + " ROIs to EcoTaxa table")
         else:
             with open(self.options["output_file"], "w") as ecotaxa_md:
                 ecotaxa_md_writer = csv.DictWriter(ecotaxa_md, fieldnames=self.entry_provider.ecotaxa_table_header.keys(), quoting=csv.QUOTE_NONNUMERIC, delimiter='\t', lineterminator='\n')
@@ -508,10 +512,12 @@ class MainJob:
                         entry = next(self.entry_provider)
                         self.currently_processing += 1
                         ecotaxa_md_writer.writerow(entry[0])
+                        self.transferred_rois += 1
                         if (self.currently_processing % 512) == 0:
                             self.calc_progress_report()
                 except StopIteration:
                     pass
 
+            self.log_function("Saved " + str(self.transferred_rois) + " ROIs to EcoTaxa table")
 
 
