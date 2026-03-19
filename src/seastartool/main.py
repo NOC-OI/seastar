@@ -290,7 +290,7 @@ def base_cli():
 
             if logfile_path is not None:
                 logfile_fh = open(logfile_path, "a")
-                curr_datetime = datetime.datetime.now(datetime.UTC)
+                curr_datetime = datetime.datetime.now(datetime.timezone.utc) # Do not use datetime.UTC - only avail on Python 3.11 or newer
                 logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] SeaSTAR invoked with following command\n")
                 logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + " ".join(sys.argv[1:]) + "\n")
 
