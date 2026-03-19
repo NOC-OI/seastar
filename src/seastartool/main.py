@@ -321,7 +321,7 @@ def base_cli():
                 else:
                     print("\n[LOG] " + txt, end="")
                 if logfile_fh is not None:
-                    curr_datetime = datetime.datetime.now(datetime.UTC)
+                    curr_datetime = datetime.datetime.now(datetime.timezone.utc)
                     logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + txt + "\n")
 
             def error_function(txt, err_level):
@@ -330,7 +330,7 @@ def base_cli():
                 else:
                     print("\n[ERR] " + txt, end="")
                 if logfile_fh is not None:
-                    curr_datetime = datetime.datetime.now(datetime.UTC)
+                    curr_datetime = datetime.datetime.now(datetime.timezone.utc)
                     logfile_fh.write("[ERR - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + txt + "\n")
 
             log_function("Preparing job...")
