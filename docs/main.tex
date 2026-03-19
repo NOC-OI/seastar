@@ -5,6 +5,35 @@
 \usepackage[a4paper, margin=1in]{geometry}
 \usepackage{hyperref}
 \usepackage[style=ieee]{biblatex}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
 \usepackage{parskip}
 
 \title{SeaSTAR Documentation}
@@ -24,6 +53,62 @@
 \newpage
 \section{Installing SeaSTAR}
 
+The easiest way to install SeaSTAR is via PyPI into a Python Virtual Environment:
 
+\begin{lstlisting}
+[alewin@nike ~]$ python3 -m venv seastarvenv
+[alewin@nike ~]$ source ~/seastarvenv/bin/activate
+(seastarvenv) [alewin@nike ~]$ pip install seastartool
+\end{lstlisting}
+
+Whenever you are using SeaSTAR like this, you need to first enable the Virtual Environment with the \texttt{source \~{}/seastarvenv/bin/activate} command. You should now be able to run the SeaSTAR CLI as so:
+
+\begin{lstlisting}
+(general_venv) [alewin@nike docs]$ seastar
+
+SeaSTAR
+Sea-faring System for Tagging, Attribution and Redistribution
+
+Copyright 2025, A Baldwin <alewin@noc.ac.uk>, National Oceanography Centre
+This program comes with ABSOLUTELY NO WARRANTY. This is free software,
+and you are welcome to redistribute it under the conditions of the
+GPL version 3 license.
+
+ERROR
+No command specified
+
+Common usage:
+
+seastar --gui                           Launch the SeaSTAR GUI
+seastar <job_name> [flags]              General structure
+
+With any SeaSTAR job you can use --logfile <file_path> to send all log output
+to a file in addition to the console. This log output will also include the date
+and time, along with all arguments used to invoke SeaSTAR.
+
+Use "seastar <job_name> --help" to get specific help for a given job.
+The following jobs are avaliable:
+
+ecotaxa_to_crab                         EcoTaxa to CRAB compatible upload
+
+    Creates CRAB compatible parquet files for uploading images or updating
+    annotations in CRAB.
+
+ifcb_v4_features                        IFCB feature extractor (WHOI v4 compatible)
+
+    Extracts morphological feature information from raw IFCB data. Is
+    compatible with outputs of the V4 WHOI classifier.
+
+ifcb_to_ecotaxa                         EcoTaxa IFCB Data Import
+
+    Creates EcoTaxa TSV or ZIP files for uploading images or updating metadata
+    from raw IFCB data, and/or morphological feature files.
+
+\end{lstlisting}
+
+\section{Extracting features from IFCB data}
+
+\begin{lstlisting}
+\end{lstlisting}
 
 \end{document}
