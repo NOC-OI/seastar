@@ -1,6 +1,11 @@
 testdata/
 testout/
 
+docs/main.aux
+docs/main.bcf
+docs/main.out
+docs/main.run.xml
+docs/main.toc
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
