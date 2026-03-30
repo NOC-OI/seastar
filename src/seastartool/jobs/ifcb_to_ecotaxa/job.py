@@ -297,7 +297,7 @@ class IFCBEntryProvider:
                 "object_time":  dt.strftime("%H:%M:%S"),
                 "object_roi_width": int(trigger_values["roi_width"]),
                 "object_roi_height": int(trigger_values["roi_height"]),
-                "process_id": ifcb_bin,
+                "process_id": ifcb_bin + "_SeaSTAR",
                 "process_date": self.process_time.strftime("%Y-%m-%d"),
                 "process_time": self.process_time.strftime("%H:%M:%S"),
                 "acq_id": trigger_id,
