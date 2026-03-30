@@ -19,7 +19,7 @@ SeaSTAR has in-built help which you can access using:
 $ seastar --help
 ```
 
-For a more detailed quick-start guide, see the [wiki](https://github.com/NOC-OI/seastar/wiki)
+For more guides on how to use the software (such as to extract features or generate EcoTaxa tables), see the [wiki](https://github.com/NOC-OI/seastar/wiki).
 
 ## An example with the IFCB
 Given an example data:
