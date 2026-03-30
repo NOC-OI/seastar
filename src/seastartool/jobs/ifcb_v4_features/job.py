@@ -45,6 +45,22 @@ class MainJob:
         self.log_function("Processing \"" + source_file + ".roi\"")
         first = True
         feature_extractor = planktofeatures.extractors.WHOIVersion4()
+        force_overwrite = False
+        ignore_existing = False
+        if "force_overwrite" in self.options:
+            force_overwrite = self.options["force_overwrite"]
+
+        if "ignore_existing" in self.options:
+            ignore_existing = self.options["ignore_existing"]
+        if os.path.isfile(csv_file):
+            if force_overwrite:
+                self.log_function("File \"" + csv_file + "\" already exists, overwriting anyway as requested")
+            else:
+                if ignore_existing:
+                    self.log_function("File \"" + csv_file + "\" already exists, ignoring as requested")
+                    return None
+                else:
+                    raise RuntimeError("File \"" + csv_file + "\" already exists, use --ignore to surpress this error, and --force to overwrite files")
         with open(csv_file, "w", newline="") as csvfile:
             csv_writer = csv.writer(csvfile, delimiter=",", quotechar="\"", quoting=csv.QUOTE_MINIMAL)
             adc_row_idx = 0

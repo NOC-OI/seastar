@@ -244,15 +244,20 @@ def base_cli():
                 elif semantic_type == "SWITCH":
                     input_sig_ed = ""
 
+                hint_text = input_def["hint"]
+
                 if "cli_short" in input_def.keys():
                     input_sig = "  -" + input_def["cli_short"] + ", "
                 if "cli_arg" in input_def.keys():
                     input_sig += "--" + input_def["cli_arg"]
+                if "required" in input_def.keys():
+                    if input_def["required"]:
+                        hint_text = "[REQUIRED] " + hint_text
 
                 input_sig = input_sig + " " + input_sig_ed
 
                 if "hint" in input_def.keys():
-                    input_tail_lines = text_wrapper.fill(input_def["hint"]).replace("\n", "\n" + (" " * 40))
+                    input_tail_lines = text_wrapper.fill(hint_text).replace("\n", "\n" + (" " * 40))
                 input_str_def = input_sig.ljust(40, " ") + input_tail_lines
                 print(input_str_def)
     else:
