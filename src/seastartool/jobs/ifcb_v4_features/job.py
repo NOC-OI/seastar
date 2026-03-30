@@ -28,7 +28,7 @@ class MainJob:
             ifcb_files.append(file_name)
 
 
-        self.log_function("Creating ROIReaders")
+        self.log_function("Creating ROI readers")
 
         for i in range(len(ifcb_files)):
             self.log_function("Loading \"" + ifcb_files[i] + ".hdr\"")
@@ -76,6 +76,13 @@ class MainJob:
         self.first_time = time.time()
         self.currently_processing = 0
         self.last_time = time.time()
+
+        os.makedirs(self.options["output_folder"], exist_ok=True)
         for roi_reader_idx in range(len(self.roi_readers)):
             csv_file = os.path.join(self.options["output_folder"], self.ifcb_bins[roi_reader_idx] + "_features_v4.csv")
             self.generate_features_one_file(self.roi_readers[roi_reader_idx], self.ifcb_files[roi_reader_idx], self.ifcb_bins[roi_reader_idx], csv_file)
+
+        if len(self.roi_readers) == 0:
+            self.log_function("No ROI files loaded! - Are you sure you specified the right input files?")
+        else:
+            self.log_function("Processed " + str(len(self.roi_readers)) + " IFCB bins")

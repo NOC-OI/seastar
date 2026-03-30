@@ -445,6 +445,8 @@ class MainJob:
         self.transferred_rois = 0
         self.last_time = time.time()
 
+        os.makedirs(os.path.dirname(self.options["output_file"]), exist_ok=True)
+
         if self.with_images:
             zip_files = 1
             out_zip = None
