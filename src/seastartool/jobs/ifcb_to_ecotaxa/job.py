@@ -94,8 +94,6 @@ class IFCBEntryProvider:
                 "area_over_perimetersquared": ("[f]", "object_area_over_perimetersquared"),
                 "area_over_perimeter": ("[f]", "object_area_over_perimeter"),
                 "area": ("[f]", "object_area"),
-                "date": ("[f]", "object_date"),
-                "time": ("[f]", "object_time"),
                 "texture_uniformity": ("[f]", "object_texture_uniformity"),
                 "texture_third_moment": ("[f]", "object_texture_third_moment"),
                 "texture_smoothness": ("[f]", "object_texture_smoothness"),
