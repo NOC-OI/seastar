@@ -8,9 +8,12 @@ import textwrap
 import datetime
 import glob
 
+version_string = "0.17"
+
 long_help_text = """
 seastar --gui                           Launch the SeaSTAR GUI
 seastar <job_name> [flags]              General structure
+seastar --version                       Print version string and exit
 
 With any SeaSTAR job you can use --logfile <file_path> to send all log output
 to a file in addition to the console. This log output will also include the date
@@ -58,6 +61,7 @@ def base_cli():
     io_def = None
     gui_flag = False
     logfile_path = None
+    version_flag = False
 
     for arg in eargs:
         if arg.startswith("--"):
@@ -68,6 +72,12 @@ def base_cli():
                 ehelp_msg = None
                 help_flag = True
                 explicit_help_flag = True
+                break
+            if arg == "--version":
+                ehelp_msg = None
+                help_flag = True
+                explicit_help_flag = True
+                version_flag = True
                 break
             if arg == "--gui":
                 gui_flag = True
@@ -182,84 +192,89 @@ def base_cli():
                                 ehelp_msg += "\nHint: " + io_def["inputs"][option_key]["hint"]
 
     if help_flag:
-        print("")
-        print("SeaSTAR")
-        print("Sea-faring System for Tagging, Attribution and Redistribution")
-        print("")
-        print("Copyright 2025, A Baldwin <alewin@noc.ac.uk>, National Oceanography Centre")
-        print("This program comes with ABSOLUTELY NO WARRANTY. This is free software,")
-        print("and you are welcome to redistribute it under the conditions of the")
-        print("GPL version 3 license.")
-        print("")
-        if ehelp_msg is not None:
-            if not explicit_help_flag:
-                print("ERROR")
-                print(ehelp_msg)
-                print("")
-        if (command == "help") or (command is None):
-            print("Common usage:")
-            print(long_help_text)
-            print("Use \"seastar <job_name> --help\" to get specific help for a given job.")
-            print("The following jobs are avaliable:")
-            print("")
-            for command_name in module_io_defs.keys():
-                title = module_io_defs[command_name]["name"]
-                description = module_io_defs[command_name]["description"]
-                print(command_name.ljust(40, " ") + title)
-                print("")
-                text_wrapper = textwrap.TextWrapper(width=79-4)
-                print("    " + text_wrapper.fill(text=description).replace("\n", "\n    "))
-                print("")
+        if version_flag:
+            print(version_string)
         else:
-
-            io_def = module_io_defs[command]
-            title = io_def["name"]
-            description = io_def["description"]
-            print(command.ljust(40, " ") + title)
             print("")
-            text_wrapper = textwrap.TextWrapper(width=79)
-            print(text_wrapper.fill(text=description))
+            print("SeaSTAR v" + version_string)
+            print("Sea-faring System for Tagging, Attribution and Redistribution")
             print("")
+            print("Author: Hannah Baldwin <hannah.baldwin@noc.ac.uk>")
+            print("")
+            print("Copyright 2025-2026 National Oceanography Centre, United Kingdom")
+            print("This program comes with ABSOLUTELY NO WARRANTY. This is free software,")
+            print("and you are welcome to redistribute verbatim and/or modified copies")
+            print("under the conditions of the GPL version 3 license only.")
+            print("")
+            if ehelp_msg is not None:
+                if not explicit_help_flag:
+                    print("ERROR")
+                    print(ehelp_msg)
+                    print("")
+            if (command == "help") or (command is None):
+                print("Common usage:")
+                print(long_help_text)
+                print("Use \"seastar <job_name> --help\" to get specific help for a given job.")
+                print("The following jobs are avaliable:")
+                print("")
+                for command_name in module_io_defs.keys():
+                    title = module_io_defs[command_name]["name"]
+                    description = module_io_defs[command_name]["description"]
+                    print(command_name.ljust(40, " ") + title)
+                    print("")
+                    text_wrapper = textwrap.TextWrapper(width=79-4)
+                    print("    " + text_wrapper.fill(text=description).replace("\n", "\n    "))
+                    print("")
+            else:
 
-            text_wrapper = textwrap.TextWrapper(width=79-40-1)
+                io_def = module_io_defs[command]
+                title = io_def["name"]
+                description = io_def["description"]
+                print(command.ljust(40, " ") + title)
+                print("")
+                text_wrapper = textwrap.TextWrapper(width=79)
+                print(text_wrapper.fill(text=description))
+                print("")
 
-            for input_def_key in io_def["inputs"]:
+                text_wrapper = textwrap.TextWrapper(width=79-40-1)
 
-                input_def = io_def["inputs"][input_def_key]
-                input_sig = "      "
-                input_tail_lines = ""
-                semantic_type = "TEXT"
-                if "type" in input_def.keys():
-                    if input_def["type"] == "BOOLEAN":
-                        semantic_type = "SWITCH"
-                if "semantic_type" in input_def.keys():
-                    semantic_type = input_def["semantic_type"]
-                input_sig_ed = "<text>"
-                if semantic_type == "MULTIPLE_FILES":
-                    input_sig_ed = "<file> [file [...]]"
-                if semantic_type == "SINGLE_FILE":
-                    input_sig_ed = "<file>"
-                elif semantic_type == "SINGLE_FOLDER":
-                    input_sig_ed = "<folder>"
-                elif semantic_type == "SWITCH":
-                    input_sig_ed = ""
+                for input_def_key in io_def["inputs"]:
 
-                hint_text = input_def["hint"]
+                    input_def = io_def["inputs"][input_def_key]
+                    input_sig = "      "
+                    input_tail_lines = ""
+                    semantic_type = "TEXT"
+                    if "type" in input_def.keys():
+                        if input_def["type"] == "BOOLEAN":
+                            semantic_type = "SWITCH"
+                    if "semantic_type" in input_def.keys():
+                        semantic_type = input_def["semantic_type"]
+                    input_sig_ed = "<text>"
+                    if semantic_type == "MULTIPLE_FILES":
+                        input_sig_ed = "<file> [file [...]]"
+                    if semantic_type == "SINGLE_FILE":
+                        input_sig_ed = "<file>"
+                    elif semantic_type == "SINGLE_FOLDER":
+                        input_sig_ed = "<folder>"
+                    elif semantic_type == "SWITCH":
+                        input_sig_ed = ""
 
-                if "cli_short" in input_def.keys():
-                    input_sig = "  -" + input_def["cli_short"] + ", "
-                if "cli_arg" in input_def.keys():
-                    input_sig += "--" + input_def["cli_arg"]
-                if "required" in input_def.keys():
-                    if input_def["required"]:
-                        hint_text = "[REQUIRED] " + hint_text
+                    hint_text = input_def["hint"]
 
-                input_sig = input_sig + " " + input_sig_ed
+                    if "cli_short" in input_def.keys():
+                        input_sig = "  -" + input_def["cli_short"] + ", "
+                    if "cli_arg" in input_def.keys():
+                        input_sig += "--" + input_def["cli_arg"]
+                    if "required" in input_def.keys():
+                        if input_def["required"]:
+                            hint_text = "[REQUIRED] " + hint_text
 
-                if "hint" in input_def.keys():
-                    input_tail_lines = text_wrapper.fill(hint_text).replace("\n", "\n" + (" " * 40))
-                input_str_def = input_sig.ljust(40, " ") + input_tail_lines
-                print(input_str_def)
+                    input_sig = input_sig + " " + input_sig_ed
+
+                    if "hint" in input_def.keys():
+                        input_tail_lines = text_wrapper.fill(hint_text).replace("\n", "\n" + (" " * 40))
+                    input_str_def = input_sig.ljust(40, " ") + input_tail_lines
+                    print(input_str_def)
     else:
         for option_key in options.keys():
             input_def = module_io_defs[command]["inputs"][option_key]
@@ -296,7 +311,7 @@ def base_cli():
             if logfile_path is not None:
                 logfile_fh = open(logfile_path, "a")
                 curr_datetime = datetime.datetime.now(datetime.timezone.utc) # Do not use datetime.UTC - only avail on Python 3.11 or newer
-                logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] SeaSTAR invoked with following command\n")
+                logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] SeaSTAR v" + version_string + " invoked with following command\n")
                 logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + " ".join(sys.argv[1:]) + "\n")
 
             def prf(prop, etr):
