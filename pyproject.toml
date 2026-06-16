@@ -2,7 +2,7 @@
 name = "seastartool"
 dynamic = ["version"]
 authors = [
-  { name="Alex Baldwin", email="contact@alexbaldwin.dev" },
+  { name="Hannah Baldwin", email="contact@hannahbaldwin.net" },
 ]
 license = "GPL-3.0"
 description = "The Sea-faring System for Tagging, Attribution and Redistribution (SeaSTAR) is a GUI and CLI application for processing biodiversity data collected at sea."
