@@ -99,6 +99,7 @@ def base_cli():
                                     mode_stack.append(mode)
                                     if multiple_capture_switch:
                                         mode = "multi_capture"
+                                        capture_heap = [] # Make sure to start with a blank heap!
                                     else:
                                         mode = "single_capture"
                                 option_recognised = True

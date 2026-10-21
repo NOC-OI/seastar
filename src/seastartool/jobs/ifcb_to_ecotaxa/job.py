@@ -141,7 +141,7 @@ class IFCBEntryProvider:
                 bindcol_def = bindcol_strdef.split(":")
                 print(self.options["bind_column"])
                 if len(bindcol_def) != 3:
-                    raise RuntimeError("Could not parse bind column definition: \"" + bindcol_strdef+ "\". Make sure bind column definitions are in the format <input_column>:<f|t>:<output_column> (e.g. --bind-column \"Salinity PSU:f:sample_salinity_psu\").")
+                    raise RuntimeError("Could not parse bind column definition: \"" + bindcol_strdef+ "\". Make sure bind column definitions are in the format <input_column>:<f|t>:<output_column> (e.g. --bindcol \"Salinity PSU:f:sample_salinity_psu\").")
                 self.key_translations[bindcol_def[0]] = ("[" + bindcol_def[1] + "]", bindcol_def[2])
 
 
@@ -305,7 +305,6 @@ class IFCBEntryProvider:
                     self.job_object.log_function("These columns will be IGNORED and will not be transferred to EcoTaxa")
                     self.job_object.log_function("If you want these columns bound into the EcoTaxa table, use the --bindcol function, e.g.:")
                     self.job_object.log_function("--bindcol " + built_bindcol[:-1])
-
 
                 for column_index in range(len(matched_ecotaxa_columns)):
                     if matched_ecotaxa_columns[column_index] not in self.column_sources.keys():
