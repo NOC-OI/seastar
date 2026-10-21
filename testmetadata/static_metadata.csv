@@ -1,2 +1,2 @@
-bin,lat,long,time
-D20191211T034109_IFCB010,41.325,0.24,03:41
+bin,lat,long,time,bindCol Test,ignored_col
+D20191211T034109_IFCB010,41.325,0.24,03:41,EXAMPLE,IGNORED

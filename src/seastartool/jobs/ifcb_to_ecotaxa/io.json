@@ -24,6 +24,13 @@
             "hint": "Output zip or tsv file",
             "semantic_type": "SINGLE_FILE"
         },
+        "bind_column": {
+            "type": "STRING",
+            "multiple": true,
+            "cli_arg": "bindcol",
+            "hint": "Bind input column names directly to an output EcoTaxa column in format <input_column>:<f|t>:<output_column> (e.g. Salinity:f:sample_salinity)",
+            "semantic_type": "MULTIPLE_STRINGS"
+        },
         "ignore_before": {
             "type": "STRING",
             "cli_arg": "fromdate",

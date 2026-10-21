@@ -73,18 +73,18 @@ class IFCBEntryProvider:
                 "lon": ("[f]", "object_lon"),
                 "long": ("[f]", "object_lon"),
                 "longitude": ("[f]", "object_lon"),
+                "depth_min": ("[f]", "object_depth_min"),
+                "depth_max": ("[f]", "object_depth_max"),
                 "feature_extractor": ("[t]", "process_feature_extractor"),
                 "volume_imaged": ("[f]", "acq_volimage"),
-                "max_esd_save_threshold": ("[f]", "acq_min_esd"),
-                "min_esd_save_threshold": ("[f]", "acq_max_esd"),
+                "max_esd_save_threshold": ("[f]", "acq_max_esd"),
+                "min_esd_save_threshold": ("[f]", "acq_min_esd"),
                 "area": ("[f]", "object_area"),
                 "convexarea": ("[f]", "object_convexarea"),
                 "convexperimeter": ("[f]", "object_convexperimeter"),
                 "extent": ("[f]", "object_extent"),
                 "equivdiameter": ("[f]", "object_equivdiameter"),
                 "eccentricity": ("[f]", "object_eccentricity"),
-                "convexperimeter": ("[f]", "object_convexperimeter"),
-                "convexarea": ("[f]", "object_convexarea"),
                 "boundingbox_ywidth": ("[f]", "object_boundingbox_ywidth"),
                 "boundingbox_xwidth": ("[f]", "object_boundingbox_xwidth"),
                 "biovolume": ("[f]", "object_biovolume"),
@@ -93,7 +93,6 @@ class IFCBEntryProvider:
                 "b180": ("[f]", "object_b180"),
                 "area_over_perimetersquared": ("[f]", "object_area_over_perimetersquared"),
                 "area_over_perimeter": ("[f]", "object_area_over_perimeter"),
-                "area": ("[f]", "object_area"),
                 "texture_uniformity": ("[f]", "object_texture_uniformity"),
                 "texture_third_moment": ("[f]", "object_texture_third_moment"),
                 "texture_smoothness": ("[f]", "object_texture_smoothness"),
@@ -136,6 +135,15 @@ class IFCBEntryProvider:
                 "h90": ("[f]", "object_h90"),
                 "h180": ("[f]", "object_h180"),
             }
+
+        if "bind_column" in self.options.keys():
+            for bindcol_strdef in self.options["bind_column"]:
+                bindcol_def = bindcol_strdef.split(":")
+                print(self.options["bind_column"])
+                if len(bindcol_def) != 3:
+                    raise RuntimeError("Could not parse bind column definition: \"" + bindcol_strdef+ "\". Make sure bind column definitions are in the format <input_column>:<f|t>:<output_column> (e.g. --bind-column \"Salinity PSU:f:sample_salinity_psu\").")
+                self.key_translations[bindcol_def[0]] = ("[" + bindcol_def[1] + "]", bindcol_def[2])
+
 
         #,
         #        "": ("[]", "")
@@ -230,25 +238,43 @@ class IFCBEntryProvider:
         metadata_dict = list(csv.DictReader(csv_fd))
         if len(metadata_dict) > 0:
             dict_keys = metadata_dict[0].keys()
+            dict_keys_sclu = {}
+            bound_keys = []
+            unbound_keys = []
+
+            for dict_key in dict_keys:
+                dict_keys_sclu[dict_key.lower()] = dict_key
+
             can_join_dict = False
             metadata_dict_info = {
                     "data_keys": [],
                     "filename": csv_filename
                 }
             bin_id_regex = re.compile(r'D[0-9]{8}T[0-9]{6}_IFCB[0-9]+')
-            if ("bin" in dict_keys) or ("filename" in dict_keys):
+
+            bin_names = ["bin", "filename", "Bin", "BIN", "Filename", "FileName"]
+            bin_matches = list(map(lambda v: v in dict_keys, bin_names))
+
+            if any(bin_matches):
                 can_join_dict = True
-                metadata_dict_info["bin_key_column"] = "filename"
-                if "bin" in dict_keys:
-                    metadata_dict_info["bin_key_column"] = "bin"
-            if ("roi_number" in dict_keys):
+                bin_match_index = next((x[0] for x in enumerate(bin_matches) if x[1]), None) # SHOULD never be None, as any() should filter out this case. Returns first index of match
+                bound_keys.append(bin_names[bin_match_index])
+                metadata_dict_info["bin_key_column"] = bin_names[bin_match_index]
+
+            roi_names = ["roi_number", "roi_index", "ROI#"]
+            roi_matches = list(map(lambda v: v in dict_keys, roi_names))
+
+            if any(roi_matches):
                 can_join_dict = True
-                metadata_dict_info["roi_key_column"] = "roi_number"
+                roi_match_index = next((x[0] for x in enumerate(roi_matches) if x[1]), None)
+                bound_keys.append(roi_names[roi_match_index])
+                metadata_dict_info["roi_key_column"] = roi_names[roi_match_index]
                 result = bin_id_regex.search(csv_filename)
                 metadata_dict_info["bin_match"] = result.group()
                 metadata_dict_info["roi_key_index"] = {}
                 for row_index in range(len(metadata_dict)):
                     metadata_dict_info["roi_key_index"][int(metadata_dict[row_index][metadata_dict_info["roi_key_column"]])] = row_index
+
             if can_join_dict:
                 metadata_dict_info["dict"] = metadata_dict
                 matched_ecotaxa_columns = []
@@ -258,8 +284,28 @@ class IFCBEntryProvider:
                 for candidate_key in self.key_translations.keys():
                     if candidate_key in dict_keys:
                         match_data_keys.append(candidate_key)
+                        bound_keys.append(candidate_key)
                         matched_ecotaxa_types.append(self.key_translations[candidate_key][0])
                         matched_ecotaxa_columns.append(self.key_translations[candidate_key][1])
+                    elif candidate_key in dict_keys_sclu.keys(): # Match via snake_cased version if no initial match
+                        match_data_keys.append(dict_keys_sclu[candidate_key])
+                        bound_keys.append(dict_keys_sclu[candidate_key])
+                        matched_ecotaxa_types.append(self.key_translations[candidate_key][0])
+                        matched_ecotaxa_columns.append(self.key_translations[candidate_key][1])
+
+                for candidate_key in dict_keys:
+                    if candidate_key not in bound_keys:
+                        unbound_keys.append(candidate_key)
+
+                if len(unbound_keys) > 0:
+                    built_bindcol = ""
+                    for unbound_key in unbound_keys:
+                        built_bindcol += "\"" + unbound_key + ":f:sample_" + unbound_key.lower().replace(" ", "_") + "\" "
+                    self.job_object.log_function("WARNING: No mapping for keys: " + str(unbound_keys))
+                    self.job_object.log_function("These columns will be IGNORED and will not be transferred to EcoTaxa")
+                    self.job_object.log_function("If you want these columns bound into the EcoTaxa table, use the --bindcol function, e.g.:")
+                    self.job_object.log_function("--bindcol " + built_bindcol[:-1])
+
 
                 for column_index in range(len(matched_ecotaxa_columns)):
                     if matched_ecotaxa_columns[column_index] not in self.column_sources.keys():
@@ -269,6 +315,8 @@ class IFCBEntryProvider:
                     self.column_sources[matched_ecotaxa_columns[column_index]].append(metadata_dict_info)
 
                 self.job_object.log_function("Loading metadata file \"" + csv_filename + "\" with " + str(len(metadata_dict_info["dict"])) + " rows")
+            else:
+                raise RuntimeError("CSV file \"" + csv_filename + "\" could not be joined! No filename, bin or roi_number column could be found")
         else:
             self.job_object.log_function("Skipping metadata file \"" + csv_filename + "\" with zero rows")
 
