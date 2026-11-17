@@ -33,6 +33,9 @@ def test_add_blobs():
         assert rows[2:] == [[f"{B}_00002", f"{B}_00002.png", "0", "20"], [f"{B}_00002", f"{B}_00002_blob.png", "1", "20"],
                             [f"{B}_00003", f"{B}_00003.png", "0", "30"], [f"{B}_00003", f"{B}_00003_blob.png", "1", "30"],
                             [f"{B}_00004", f"{B}_00004.png", "0", "40"]], rows
+        assert ecotaxa.add_blobs(out, root) == 0  # a second run adds nothing
+        with zipfile.ZipFile(out) as z:
+            assert len(z.read("upload_part1/ecotaxa_x.tsv").decode().splitlines()) == 7
 
 
 if __name__ == "__main__":
