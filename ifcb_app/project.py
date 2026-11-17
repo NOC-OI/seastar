@@ -141,29 +141,71 @@ STATS_CSV = "bin_stats.csv"
 def bin_stats(root, bins):
     """{bin: {"rois": images, "ml_analyzed": mL, "rois_per_ml": concentration}} from the .adc and .hdr files.
     Kept in log/bin_stats.csv: each bin is read once, the raw files of a bin do not change."""
+    stats = load_stats(root)
+    new = [b for b in bins if b not in stats]
+    raw = raw_bin_paths(root, new)
+    for b in new:
+        stats[b] = read_bin_stats(raw[b], b)
+    if new:
+        save_stats(root, stats)
+    return {b: stats[b] for b in bins}
+
+
+def read_bin_stats(path, bin_name):
+    """Images, mL analysed and concentration of one bin; path = the bin's files without extension."""
     from ifcbkit.adc import parse_adc_file
     from ifcbkit.header import parse_hdr
+    with open(path + ".hdr", encoding="utf-8", errors="replace") as f:
+        hdr = parse_hdr(f.read().splitlines())
+    ml = FLOW_ML_PER_MIN * (float(hdr.get("runTime", 0)) - float(hdr.get("inhibitTime", 0))) / 60
+    n = len(parse_adc_file(bin_name, path + ".adc"))
+    return {"rois": n, "ml_analyzed": round(ml, 4), "rois_per_ml": round(n / ml, 2) if ml > 0 else float("nan")}
+
+
+def load_stats(root):
     path = os.path.join(root, "log", STATS_CSV)
     stats = {}
     if os.path.isfile(path):
         with open(path, newline="", encoding="utf-8") as f:
             for r in csv.DictReader(f):
                 stats[r["bin"]] = {k: float(r[k]) for k in ("rois", "ml_analyzed", "rois_per_ml")}
-    new = [b for b in bins if b not in stats]
-    raw = raw_bin_paths(root, new)
-    for b in new:
-        with open(raw[b] + ".hdr", encoding="utf-8", errors="replace") as f:
-            hdr = parse_hdr(f.read().splitlines())
-        ml = FLOW_ML_PER_MIN * (float(hdr.get("runTime", 0)) - float(hdr.get("inhibitTime", 0))) / 60
-        n = len(parse_adc_file(b, raw[b] + ".adc"))
-        stats[b] = {"rois": n, "ml_analyzed": round(ml, 4), "rois_per_ml": round(n / ml, 2) if ml > 0 else float("nan")}
-    if new:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            w = csv.writer(f)
-            w.writerow(["bin", "rois", "ml_analyzed", "rois_per_ml"])
-            w.writerows([b, s["rois"], s["ml_analyzed"], s["rois_per_ml"]] for b, s in sorted(stats.items()))
-    return {b: stats[b] for b in bins}
+    return stats
+
+
+def save_stats(root, stats):
+    """Write every bin of `stats` (merge with load_stats() first to keep the others)."""
+    path = os.path.join(root, "log", STATS_CSV)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["bin", "rois", "ml_analyzed", "rois_per_ml"])
+        w.writerows([b, s["rois"], s["ml_analyzed"], s["rois_per_ml"]] for b, s in sorted(stats.items()))
+
+
+def check_bins(stats, bin_time):
+    """Bins that look failed, and gaps in the sampling, compared with the rest of the cruise.
+    stats: {bin: bin_stats values}; bin_time: bin name -> datetime. Returns problems like metadata.build."""
+    import statistics
+    problems = []
+    if len(stats) < 3:
+        return problems
+    rois = statistics.median(s["rois"] for s in stats.values())
+    ml = statistics.median(s["ml_analyzed"] for s in stats.values())
+    for b, s in sorted(stats.items()):
+        if s["rois"] < 0.1 * rois:
+            problems.append({"check": "Few images", "bin": b, "spreadsheet row": "",
+                             "detail": f"{s['rois']:.0f} images, the cruise median is {rois:.0f}: failed acquisition?"})
+        if s["ml_analyzed"] < 0.5 * ml:
+            problems.append({"check": "Small volume analysed", "bin": b, "spreadsheet row": "",
+                             "detail": f"{s['ml_analyzed']:.2f} mL, the cruise median is {ml:.2f} mL: run stopped early?"})
+    times = sorted((bin_time(b), b) for b in stats)
+    steps = [(t2 - t1).total_seconds() for (t1, _), (t2, _) in zip(times, times[1:])]
+    gap = max(3600, 3 * statistics.median(steps))  # shortcut: one threshold for the cruise, not per station
+    for ((t1, b1), (t2, b2)), s in zip(zip(times, times[1:]), steps):
+        if s > gap:
+            problems.append({"check": "Gap in the sampling", "bin": b2, "spreadsheet row": "",
+                             "detail": f"{s / 3600:.1f} h without a bin since {b1}"})
+    return problems
 
 
 def raw_bin_paths(root, bins):

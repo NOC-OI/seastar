@@ -169,19 +169,23 @@ MAX_SHIP_KNOTS = 20  # faster than any research ship: one of the two positions i
 
 
 def check_track(out, problem):
-    """Position jumps between consecutive bins that no ship could make: a typo in lat or lon."""
+    """Position jumps between consecutive samples that no ship could make: a typo in lat or lon.
+    Uses the Niskin time when there is one: Niskin samples are analysed later, often in batches, so the analysis
+    times of two stations can be minutes apart."""
     fixes = []
     for r in out:
         try:
-            fixes.append((bin_time(r["bin"]), float(r["object_lat"]), float(r["object_lon"]), r["bin"]))
+            t = parse_datetime(r.get("sample_niskin_date", ""), r.get("sample_niskin_time", "")) or bin_time(r["bin"])
+            fixes.append((t, float(r["object_lat"]), float(r["object_lon"]), r["bin"]))
         except (KeyError, ValueError):
             pass
+    fixes.sort()
     for (t1, la1, lo1, b1), (t2, la2, lo2, b2) in zip(fixes, fixes[1:]):
         nm = distance_nm(la1, lo1, la2, lo2)
         hours = max((t2 - t1).total_seconds() / 3600, 1 / 60)
         if nm > 1 and nm / hours > MAX_SHIP_KNOTS:
             problem("Position jump", b2, f"{nm:.0f} nautical miles from {b1} in {hours:.1f} h ({nm / hours:.0f} knots): "
-                    "check lat/lon of both bins")
+                    "a typo in lat/lon, or Niskin samples without their Niskin date and time")
 
 
 def distance_nm(lat1, lon1, lat2, lon2):

@@ -6,6 +6,7 @@ Bins that already have a feature file are skipped. Outputs, as WHOI's extract_fe
     whoi_v4_V131_features/features/<day>/<bin>_features_v4.csv  (+ multiblob/)
     whoi_v4_V131_features/blobs/<day>/<bin>_blobs_v4.zip
     whoi_v4_V131_features/feature_extractor_versions.csv  (bin, extractor, release: joined by SeaSTAR per bin)
+    log/bin_stats.csv  (images and mL analysed of each bin, for the quality check figures)
 Progress is written to log/features_status.json (read by the app) and log/features_<date>.log.
 """
 import argparse
@@ -21,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import project
 
 
-def extract_one(raw_dir, out_dir, bin_name):
+def extract_one(raw_dir, out_dir, bin_name, raw_path):
     from whoi.extract_slim_features import configure_output, extract_and_save_all_features
     configure_output(False)
     day = bin_name[:9]
@@ -29,7 +30,7 @@ def extract_one(raw_dir, out_dir, bin_name):
                                   blobs_directory=os.path.join(out_dir, "blobs", day))
     if not os.path.isfile(project.feature_file(out_dir, bin_name)):
         raise RuntimeError("no feature file written (bin unreadable or without images)")
-    return bin_name
+    return project.read_bin_stats(raw_path, bin_name)  # images and mL analysed, for the QC figures
 
 
 def main():
@@ -42,6 +43,8 @@ def main():
     raw_dir, out_dir, log_dir = (os.path.join(root, d) for d in ("raw", project.FEATURES_DIR, "log"))
     os.makedirs(log_dir, exist_ok=True)
     todo = project.bins_without_features(root)
+    raw_paths = project.raw_bin_paths(root, todo)
+    stats = project.load_stats(root)
     version = project.whoi_version()
     status = {"pid": os.getpid(), "whoi_version": version,
               "started": datetime.now().isoformat(timespec="seconds"), "workers": args.workers,
@@ -59,11 +62,11 @@ def main():
     log.write(f"WHOI ifcb-features {version}, {len(todo)} bins to process with {args.workers} workers\n")
     t0 = time.time()
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(extract_one, raw_dir, out_dir, b): b for b in todo}
+        futures = {pool.submit(extract_one, raw_dir, out_dir, b, raw_paths[b]): b for b in todo}
         for fut in as_completed(futures):
             b = futures[fut]
             try:
-                fut.result()
+                stats[b] = fut.result()
                 project.record_extractor_version(out_dir, b, version)
                 log.write(f"[{status['done'] + 1}/{len(todo)}] {b} ok\n")
             except Exception as e:
@@ -72,6 +75,9 @@ def main():
             status["done"] += 1
             log.flush()
             save()
+            if status["done"] % 20 == 0:
+                project.save_stats(root, stats)
+    project.save_stats(root, stats)
     status["finished"] = datetime.now().isoformat(timespec="seconds")
     save()
     log.write(f"Finished in {time.time() - t0:.0f} s, {len(status['errors'])} errors\n")

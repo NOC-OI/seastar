@@ -456,8 +456,9 @@ if meta_rows is None and (meta_dir / metadata.OUTPUT_CSV).is_file():
 bins = complete_bins(str(folder))
 todo = sorted(set(bins) - known_stats(folder))
 if todo and not st.session_state.get(f"count_{folder}"):
-    st.info(f"The images of {len(todo)} bin(s) are not counted yet: it reads their .adc files once "
-            "(a few minutes for a whole cruise on the network drive), then they are kept in `log/bin_stats.csv`.")
+    st.info(f"The images of {len(todo)} bin(s) are not counted yet. The feature extraction (section 2) counts them; "
+            "for bins extracted before, this button reads their .adc files once (up to an hour or more for a whole "
+            "cruise on a slow network drive), then they are kept in `log/bin_stats.csv`.")
     if st.button("Count the images", type="primary"):
         st.session_state[f"count_{folder}"] = True
         st.rerun()
@@ -474,6 +475,14 @@ elif bins:
         keep = [c for c in meta.columns if c in numeric]
         meta[keep] = meta[keep].apply(pd.to_numeric, errors="coerce")
         df = df.merge(meta[["bin"] + keep], on="bin", how="left")
+    bin_problems = project.check_bins(stats, metadata.bin_time)
+    if bin_problems:
+        summary = pd.Series([p["check"] for p in bin_problems]).value_counts()
+        st.warning(f"**{len(bin_problems)} bin(s) to look at**: " + " · ".join(f"{c} ({n})" for c, n in summary.items())
+                   + ". Failed acquisitions can be moved out of raw/ (e.g. to Failed_acquisitions_rawdata) "
+                   "before the EcoTaxa tables.")
+        st.dataframe(pd.DataFrame(bin_problems).drop(columns="spreadsheet row"), width="stretch", hide_index=True)
+    flagged = flagged | {p["bin"] for p in bin_problems if p["check"] != "Gap in the sampling"}
     df["status"] = ["to check" if b in flagged else "ok" for b in df["bin"]]
 
     import altair as alt
