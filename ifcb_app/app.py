@@ -80,6 +80,18 @@ def create():
 def create_missing():
     created = project.create_missing_dirs(st.session_state["project"])
     st.session_state["created_note"] = "Folders created: " + ", ".join(created)
+    rescan()
+
+
+# Reading a project on the network drive can take a minute: kept in memory, read again by rescan() or after 10 min
+scan_project = st.cache_data(ttl=600, show_spinner="Reading the project folder…")(project.scan_project)
+bins_without_features = st.cache_data(ttl=600, show_spinner="Looking for the bins without features…")(
+    project.bins_without_features)
+
+
+def rescan():
+    scan_project.clear()
+    bins_without_features.clear()
 
 
 # ---------------------------------------------------------------- page
@@ -122,7 +134,8 @@ if st.session_state["created_note"]:
 if not folder or not folder.is_dir():
     st.stop()
 
-s = project.scan_project(str(folder))
+st.button("Rescan the project", on_click=rescan, help="Read the folders again, e.g. after copying new data into raw/")
+s = scan_project(str(folder))
 missing = [d for d, ok in s["present"].items() if not ok]
 if missing:
     st.warning("This project has no " + ", ".join(f"`{d}`" for d in missing) + " folder.")
@@ -238,7 +251,8 @@ def features_panel():
         st.button("Stop the extraction", on_click=stop_extraction, args=(status["pid"],))
         return
     if st.session_state.pop("extraction_started", False):
-        st.rerun()  # the extraction just ended: refresh the counts of section 1
+        rescan()
+        st.rerun()  # the extraction just ended or was stopped: read the project again for both sections
 
     if status and status["finished"] and status["total"]:
         msg = (f"Last extraction: {status['done']} bin{'s' if status['done'] > 1 else ''} with WHOI ifcb-features "
@@ -255,7 +269,7 @@ def features_panel():
         st.warning(f"The last extraction stopped before the end ({status['done']} / {status['total']} bins). "
                    "Run it again: the bins already done are skipped.")
 
-    todo = project.bins_without_features(str(folder))
+    todo = bins_without_features(str(folder))
     if not todo:
         st.success("Every complete bin has its feature file.")
         return
