@@ -6,7 +6,7 @@ import re
 
 # Layout of Y:\ifcb_snXXX_IDcruise_namecruise, with the WHOI v1.3.1 features folder of the recent cruises
 FEATURES_DIR = "whoi_v4_V131_features"
-STANDARD_DIRS = ["raw", "metadata", "log", FEATURES_DIR, "ecotaxa_import_zip_seastar"]
+STANDARD_DIRS = ["raw", "metadata", "log", FEATURES_DIR, "ecotaxa_import_zip_seastar", "figures"]
 
 DAY_RE = re.compile(r"D\d{8}")
 BIN_RE = re.compile(r"D\d{8}T\d{6}_IFCB\d+")

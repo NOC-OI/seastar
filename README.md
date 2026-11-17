@@ -56,6 +56,7 @@ The app follows the folder layout of the NOC IFCB projects:
 ```
 ifcb_sn<serial>_<cruise ID>_<name>/          e.g. ifcb_sn225_ce26008_ar7e
     raw/D<yyyymmdd>/<bin>.hdr .adc .roi
+    figures/                                  quality check figures (PNG), saved by step 4
     metadata/
     log/
     whoi_v4_V131_features/features/D<yyyymmdd>/<bin>_features_v4.csv
@@ -68,8 +69,10 @@ ifcb_sn<serial>_<cruise ID>_<name>/          e.g. ifcb_sn225_ce26008_ar7e
 | 1 · Choose the IFCB project | Opens a project with **Browse…** or creates one with the right folder names. Shows, per day, the number of bins, complete bins (hdr + adc + roi), feature files and EcoTaxa zips, and highlights the days where they differ. | Done |
 | 2 · Extract the features | [WHOI ifcb-features](https://github.com/WHOIGit/ifcb-features) v1.3.1 (August 2026): the 30 features of the WHOI MATLAB code and the blob masks. Runs in the background on several cores, skips the bins already done, shows the progress and the time left. The WHOI version (tag and commit) is recorded for each bin and goes to EcoTaxa as `process_feature_extractor` and `process_feature_extractor_release`. | Done |
 | 3 · Sample metadata | Reads the spreadsheet of the samples (CSV or Excel) chosen with **Browse…**. For each EcoTaxa column of a shared list (latitude, longitude, depth, Niskin date and time, salinity, temperature, chlorophyll a, Niskin and CTD numbers, comment), you choose the spreadsheet column it comes from, or a value used when the spreadsheet has none (depth 5 m). Columns missing from the list can be added, and they stay available for the next projects, so every cruise gets the same column names. Depth goes to `sample_depth_*` and `object_depth_*`; dates and times are always text. Writes `metadata/metadata_ecotaxa.csv`, one row per bin, Before that, it lists what to correct in the spreadsheet: probable typos in bin names (with the bin of `raw/` they most likely are), bins without metadata, values that are not numbers or outside the expected range, position jumps no ship could make, Niskin times after the IFCB analysis. The list is also saved in `log/metadata_check_<date>.txt`. | Done |
-| 4 · Quality check figures | Map of the samples, and particle concentration (images per mL analysed, from the `.adc` and `.hdr` files) against time and depth, with every environmental variable of the spreadsheet (salinity, temperature, chlorophyll a…). Lists the bins that look failed (few images, small volume analysed) and the gaps in the sampling. Bins with a point to check are shown in another colour. The image counts are made during the feature extraction. Shows 12 images of a bin above their blob, to check the segmentation. Comes before the EcoTaxa tables so that problems are corrected first. | Done |
+| 4 · Quality check figures | Map of the samples, and particle concentration (images per mL analysed, from the `.adc` and `.hdr` files) against time and depth, with every environmental variable of the spreadsheet (salinity, temperature, chlorophyll a…). Lists the bins that look failed (few images, small volume analysed) and the gaps in the sampling. Bins with a point to check are shown in another colour. The image counts are made during the feature extraction. Shows 12 images of a bin above their blob, to check the segmentation. The figures are saved as PNG in `figures/`, again only when the data change. Comes before the EcoTaxa tables so that problems are corrected first. | Done |
 | 5 · EcoTaxa tables | One zip per bin (`<CRUISE NAME>_<bin>.zip`, as for CE26008), made by `seastar ifcb_to_ecotaxa` in the background with the images, the features, the metadata of step 3 and the feature extractor version (`process_feature_extractor`, `process_feature_extractor_release`). Operator, checker, project, ship and cruise are typed once and remembered. A box, checked by default, adds the blob of each image as a second image of the object (`img_rank` 1). Bins that already have their zip are skipped. Still to add: a check of the column names and types of every table before the upload. | Done |
+
+A second page, **Compare EcoTaxa tables**, compares the tables of several projects (row 1, the column names; row 2, the types `[f]`/`[t]`) and gives the differences as a text report you can download. It reads only the first two rows of each table and is run only when you ask.
 
 ### Starting the app
 
@@ -78,7 +81,7 @@ On Windows:
 1. Double-click `ifcb_app/create_shortcut.bat` once: it puts an **IFCB pipeline** shortcut on the desktop.
 2. Start the app from that shortcut. Keep the black window open while you use the app, and close it to stop the app.
 
-The launcher (`start_ifcb_app.bat`) uses the conda environment `ifcb_app` when there is one, otherwise the Python of the computer. On the first start, it installs the requirements (Streamlit, pandas, Pillow, openpyxl, WHOI ifcb-features and SeaSTAR from the `all-fixes` branch of this fork, which gathers the fixes of the pull requests above until they are merged). Installing WHOI ifcb-features needs [git](https://git-scm.com).
+The launcher (`start_ifcb_app.bat`) uses the conda environment `ifcb_app` when there is one, otherwise the Python of the computer. On the first start, it installs the requirements (Streamlit, pandas, Pillow, openpyxl, vl-convert, WHOI ifcb-features and SeaSTAR from the `all-fixes` branch of this fork, which gathers the fixes of the pull requests above until they are merged). Installing WHOI ifcb-features needs [git](https://git-scm.com).
 
 On any system:
 
@@ -94,7 +97,10 @@ A feature extraction runs as its own process. It goes on if the browser tab is c
 
 | File | Role |
 |---|---|
-| `app.py` | The page |
+| `app.py` | Starts the app and its two pages (menu on the left) |
+| `process.py` | Page 1, **Process a project**: steps 1 to 5 |
+| `compare.py` | Page 2, **Compare EcoTaxa tables**: a text report comparing the column names and types of the EcoTaxa tables of several projects, run when you click Compare |
+| `ui.py` | Pieces shared by the two pages (folder field with **Browse…**) |
 | `project.py` | Naming, creating and scanning a project folder (no interface code) |
 | `metadata.py` | Builds `metadata_ecotaxa.csv` from the spreadsheet and the chosen columns, and the checks (no interface code) |
 | `metadata_columns.csv` | The shared list of metadata fields: EcoTaxa column(s), type `f`/`t`, unit, value if empty, expected range. Columns added from the page are written here |

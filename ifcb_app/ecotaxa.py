@@ -15,6 +15,81 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import project
 
 
+def table_headers(root):
+    """Row 1 (names) and row 2 (types) of every EcoTaxa table of a project: the .tsv files, loose or in zips, of the
+    folders with 'ecotaxa' in their name (also archives/ecotaxa_*), not the _OLD ones. Only these two rows are read.
+    Returns [{"file": path relative to root, "columns": [...], "types": [...]}]."""
+    out = []
+    for folder, dirs, files in os.walk(root):
+        rel = os.path.relpath(folder, root)
+        depth = 0 if rel == "." else rel.count(os.sep) + 1
+        dirs[:] = [d for d in dirs if "_old" not in d.lower()
+                   and ("ecotaxa" in rel.lower() or (depth < 2 and ("ecotaxa" in d.lower() or d == "archives")))]
+        if "ecotaxa" not in rel.lower():
+            continue
+        for f in sorted(files):
+            path = os.path.join(folder, f)
+            try:
+                if f.lower().endswith(".zip"):
+                    with zipfile.ZipFile(path) as z:
+                        for t in (n for n in z.namelist() if n.lower().endswith(".tsv")):
+                            with z.open(t) as fh:
+                                out.append(_header(io.TextIOWrapper(fh, encoding="utf-8", errors="replace"),
+                                                   os.path.relpath(path, root) + "!" + t))
+                elif f.lower().endswith(".tsv"):
+                    with open(path, encoding="utf-8", errors="replace") as fh:
+                        out.append(_header(fh, os.path.relpath(path, root)))
+            except (OSError, zipfile.BadZipFile) as e:
+                out.append({"file": os.path.relpath(path, root), "columns": [], "types": [], "error": str(e)})
+    return out
+
+
+def _header(fh, name):
+    rows = []
+    for row in csv.reader(fh, delimiter="\t"):
+        rows.append(row)
+        if len(rows) == 2:
+            break
+    rows += [[]] * (2 - len(rows))
+    return {"file": name.replace("\\", "/"), "columns": rows[0], "types": rows[1]}
+
+
+def compare_report(headers):
+    """Text comparing the EcoTaxa tables of several projects. headers: {project name: table_headers(...)}."""
+    lines, sets, types = [], {}, {}
+    for name, tables in headers.items():
+        good = [t for t in tables if t["columns"]]
+        sets[name] = {}
+        for t in good:
+            sets[name].setdefault(frozenset(t["columns"]), []).append(t["file"])
+            for c, ty in zip(t["columns"], t["types"]):
+                types.setdefault(c, {}).setdefault(ty, set()).add(name)
+        orders = {tuple(t["columns"]) for t in good}
+        lines.append(f"{name}: {len(good)} table(s), {len(sets[name])} set(s) of columns, {len(orders)} column order(s)"
+                     + (f", {len(tables) - len(good)} unreadable" if len(tables) > len(good) else ""))
+        if len(sets[name]) > 1:  # differences inside one project
+            base = max(sets[name], key=lambda s: len(sets[name][s]))
+            for s, files in sets[name].items():
+                if s != base:
+                    lines.append(f"    {len(files)} table(s) differ from the {len(sets[name][base])} others "
+                                 f"(e.g. {files[0]}): + {sorted(s - base) or '-'}  − {sorted(base - s) or '-'}")
+    every = {n: frozenset().union(*s) for n, s in sets.items() if s}  # all the columns of each project
+    if not every:
+        return "\n".join(lines + ["", "No EcoTaxa table found."])
+    union, common = frozenset().union(*every.values()), frozenset.intersection(*every.values())
+    lines += ["", f"{len(union)} column names in all, {len(common)} in every project."]
+    lines += ["", "Columns not in every project (project: type):"]
+    for c in sorted(union - common):
+        where = [f"{n}: {'/'.join(sorted(ty for ty, ns in types.get(c, {}).items() if n in ns))}"
+                 for n, cols in every.items() if c in cols]
+        lines.append(f"    {c:42s} {'; '.join(where)}")
+    conflicts = {c: t for c, t in types.items() if len(t) > 1}
+    lines += ["", f"Columns with different types ([f] number / [t] text): {len(conflicts) or 'none'}"]
+    for c, t in sorted(conflicts.items()):
+        lines.append(f"    {c:42s} " + "; ".join(f"{ty} in {', '.join(sorted(ns))}" for ty, ns in sorted(t.items())))
+    return "\n".join(lines)
+
+
 def add_blobs(zip_path, root):
     """Add the WHOI blob of each image to an EcoTaxa zip made by SeaSTAR, as a second image of the object.
 
