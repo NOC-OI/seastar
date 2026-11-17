@@ -306,9 +306,19 @@ class IFCBEntryProvider:
                         matched_ecotaxa_types.append(self.key_translations[candidate_key][0])
                         matched_ecotaxa_columns.append(self.key_translations[candidate_key][1])
 
+                # Per-ROI tables are feature files: every other column is a feature, bound as object_<name>
+                is_feature_table = "roi_key_column" in metadata_dict_info
                 for candidate_key in dict_keys:
                     if candidate_key not in bound_keys:
-                        unbound_keys.append(candidate_key)
+                        if is_feature_table and candidate_key == "roi_id":
+                            continue # Same value as object_id
+                        if is_feature_table:
+                            match_data_keys.append(candidate_key)
+                            bound_keys.append(candidate_key)
+                            matched_ecotaxa_types.append("[f]")
+                            matched_ecotaxa_columns.append("object_" + candidate_key.lower())
+                        else:
+                            unbound_keys.append(candidate_key)
 
                 if len(unbound_keys) > 0:
                     built_bindcol = ""
