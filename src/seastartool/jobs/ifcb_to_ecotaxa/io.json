@@ -67,8 +67,7 @@
         "sample_depth": {
             "type": "INTEGER",
             "cli_arg": "depth",
-            "default": 5,
-            "hint": "The depth from which the sample was collected"
+            "hint": "The depth from which the sample was collected, in metres (EcoTaxa columns sample_depth_min and sample_depth_max). Not written when omitted"
         },
         "table_only": {
             "type": "BOOLEAN",
