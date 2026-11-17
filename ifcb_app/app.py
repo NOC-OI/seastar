@@ -18,6 +18,7 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
+import make_ecotaxa
 import metadata
 import project
 
@@ -183,10 +184,10 @@ MINUTES_PER_BIN = 2  # measured: ~2 min for a bin of ~5000 ROIs on one core
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
 
 
-def extraction_status(root):
-    """Content of log/features_status.json, with 'running' added; None if never run."""
+def extraction_status(root, job="features"):
+    """Content of log/<job>_status.json (features or ecotaxa), with 'running' added; None if never run."""
     try:
-        status = json.loads((root / "log" / "features_status.json").read_text(encoding="utf-8"))
+        status = json.loads((root / "log" / f"{job}_status.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     status["running"] = not status["finished"] and pid_alive(status["pid"])
@@ -546,3 +547,104 @@ else:
                 col.image(blob, caption="blob", width="stretch")
             else:
                 col.caption("no blob")
+
+
+# ---------------------------------------------------------------- 5 · EcoTaxa tables
+def start_ecotaxa(root, settings):
+    (root / "log").mkdir(exist_ok=True)
+    (root / "log" / "ecotaxa_settings.json").write_text(json.dumps(settings, indent=1), encoding="utf-8")
+    cmd = [sys.executable, str(REPO / "make_ecotaxa.py"), str(root), "--operator", settings["operator"],
+           "--workers", str(settings["workers"])]
+    for option, key in (("--qcdby", "qcdby"), ("--project-name", "project_name"), ("--ship", "ship"), ("--cruise", "cruise")):
+        if settings[key].strip():
+            cmd += [option, settings[key].strip()]
+    if settings["blobs"]:
+        cmd.append("--blobs")
+    err = open(root / "log" / "ecotaxa_errors_python.log", "a", encoding="utf-8")
+    subprocess.Popen(cmd, cwd=REPO, stdout=err, stderr=err, creationflags=NO_WINDOW)
+    st.session_state["ecotaxa_started"] = True
+
+
+st.header("5 · EcoTaxa tables")
+st.caption(f"One zip per bin, in `{make_ecotaxa.ZIP_DIR}/`, made by SeaSTAR with the images, the features of section 2, "
+           "the metadata of section 3 and the feature extractor version. Bins that already have their zip are skipped: "
+           "delete a zip to make it again.")
+try:
+    from importlib.metadata import version as package_version
+    st.markdown(f"SeaSTAR: **seastartool {package_version('seastartool')}**")
+except Exception:
+    st.error("SeaSTAR is not installed. Close the app, then start it again with start_ifcb_app.bat: it installs it.")
+    st.stop()
+
+ecotaxa_status = extraction_status(folder, "ecotaxa")
+
+
+@st.fragment(run_every=5 if ecotaxa_status and ecotaxa_status["running"] else None)
+def ecotaxa_panel():
+    status = extraction_status(folder, "ecotaxa")
+    if status and status["running"]:
+        st.session_state["ecotaxa_started"] = True
+        done, total = status["done"], status["total"]
+        st.progress(done / total if total else 1.0,
+                    text=f"Making the EcoTaxa zips: {done} / {total} bins · {status['workers']} at a time · "
+                         f"blobs: {'yes' if status['blobs'] else 'no'} · started {status['started'].replace('T', ' ')}")
+        if status["errors"]:
+            st.warning(f"{len(status['errors'])} bin(s) failed so far, see the list when it ends.")
+        st.caption("You can close this tab: it goes on as long as this computer stays on and awake.")
+        st.button("Stop", key="stop_ecotaxa", on_click=stop_extraction, args=(status["pid"],))
+        return
+    if st.session_state.pop("ecotaxa_started", False):
+        rescan()
+        st.rerun()
+    if status and status["finished"] and status["total"]:
+        msg = f"Last run: {status['done']} zip(s), finished {status['finished'].replace('T', ' ')}"
+        if status["errors"]:
+            st.warning(msg + f", {len(status['errors'])} failed:")
+            st.code("\n".join(status["errors"]), language=None)
+        else:
+            st.success(msg + ", no error. The log is in `log/ecotaxa_<date>.log`.")
+    elif status and not status["finished"]:
+        st.warning(f"The last run stopped before the end ({status['done']} / {status['total']} bins). "
+                   "Run it again: the zips already made are kept.")
+
+    todo, without, done = make_ecotaxa.plan(str(folder))
+    if without:
+        st.info(f"{len(without)} bin(s) without features are left out: run the feature extraction (section 2) first.")
+    if not (folder / "metadata" / metadata.OUTPUT_CSV).is_file():
+        st.warning("No metadata file yet (section 3): the zips would have no sample metadata.")
+    if flagged:
+        st.warning(f"{len(flagged)} bin(s) still have a point to check in sections 3 and 4. Correct them first if you can.")
+    if not todo:
+        st.success(f"Every bin with features has its EcoTaxa zip ({len(done)}).")
+        return
+
+    try:
+        saved = json.loads((folder / "log" / "ecotaxa_settings.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        info = project.scan_name(str(folder)) or {}
+        saved = {"project_name": f"{info.get('cruise_id', '')}_{info.get('cruise_name', '').upper()}".strip("_"),
+                 "cruise": info.get("cruise_id", "")}
+    c1, c2, c3 = st.columns(3)
+    operator = c1.text_input("Operator (full name)", saved.get("operator", ""), key=f"op_{folder}",
+                             help="The person who ran the IFCB: sample_operator and acq_operator")
+    qcdby = c2.text_input("Metadata checked by (full name)", saved.get("qcdby", ""), key=f"qc_{folder}")
+    project_name = c3.text_input("Project (sample_project)", saved.get("project_name", ""), key=f"pn_{folder}")
+    c1, c2, c3 = st.columns(3)
+    ship = c1.text_input("Ship (sample_ship)", saved.get("ship", ""), key=f"ship_{folder}")
+    cruise = c2.text_input("Cruise (sample_cruise)", saved.get("cruise", ""), key=f"cr_{folder}")
+    cores = os.cpu_count() or 2
+    workers = c3.number_input("Bins at a time", 1, cores, saved.get("workers", max(1, cores - 2)), key=f"wk_{folder}")
+    blobs = st.checkbox("Add the blob of each image as a second image (img_rank 1)", value=saved.get("blobs", True),
+                        key=f"blobs_{folder}", help="Each object gets two rows in the EcoTaxa table: the image "
+                        "(img_rank 0) and its blob (img_rank 1), with the same values")
+    ok_name = len(operator.strip()) >= 5 and (not qcdby.strip() or len(qcdby.strip()) >= 5)
+    if operator and not ok_name:
+        st.caption(":red[SeaSTAR asks for full names, at least 5 characters.]")
+    st.markdown(f"**{len(todo)} bin{'s' if len(todo) > 1 else ''}** to make into EcoTaxa zips"
+                + (f" ({len(done)} already made)" if done else ""))
+    st.button("Make the EcoTaxa tables", type="primary", disabled=not ok_name, on_click=start_ecotaxa,
+              args=(folder, {"operator": operator.strip(), "qcdby": qcdby, "project_name": project_name, "ship": ship,
+                             "cruise": cruise, "workers": int(workers), "blobs": blobs}))
+
+
+ecotaxa_panel()

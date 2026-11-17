@@ -13,7 +13,7 @@ for %%C in ("%USERPROFILE%\miniconda3" "%USERPROFILE%\anaconda3" "%LOCALAPPDATA%
 rem no conda environment: the Python launcher (py) if installed, else python
 where py >nul 2>nul && set PY=py -3
 :run
-%PY% -c "import streamlit, pandas, PIL, openpyxl, ifcb_features" 2>nul || %PY% -m pip install -r requirements.txt
+%PY% -c "import streamlit, pandas, PIL, openpyxl, ifcb_features, seastartool" 2>nul || %PY% -m pip install -r requirements.txt
 rem Streamlit asks for an e-mail address on its first start: an empty one is saved here, so it does not wait
 if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
     mkdir "%USERPROFILE%\.streamlit" 2>nul

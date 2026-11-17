@@ -252,6 +252,12 @@ def raw_bin_paths(root, bins):
     return out
 
 
+def scan_name(root):
+    """{serial, cruise_id, cruise_name} from ifcb_sn<serial>_<cruise ID>_<name>, or None."""
+    m = re.match(r"ifcb_sn([^_]+)_([^_]+)_(.+)$", os.path.basename(os.path.normpath(root)))
+    return {"serial": m.group(1), "cruise_id": m.group(2), "cruise_name": m.group(3)} if m else None
+
+
 def scan_project(root):
     """Summarise an existing project: which standard folders exist, and per day how many
     bins, feature files, EcoTaxa zips there are."""
@@ -276,6 +282,5 @@ def scan_project(root):
 
     meta_dir = os.path.join(root, "metadata")
     metadata = sorted(os.path.relpath(f, meta_dir).replace("\\", "/") for f in _files(meta_dir) if f.lower().endswith(".csv"))
-    m = re.match(r"ifcb_sn([^_]+)_([^_]+)_(.+)$", os.path.basename(os.path.normpath(root)))
-    info = {"serial": m.group(1), "cruise_id": m.group(2), "cruise_name": m.group(3)} if m else None
+    info = scan_name(root)
     return {"root": root, "name_info": info, "present": present, "days": dict(sorted(days.items())), "metadata": metadata}
