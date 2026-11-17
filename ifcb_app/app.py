@@ -92,12 +92,14 @@ scan_project = st.cache_data(ttl=600, show_spinner="Reading the project folder�
 bins_without_features = st.cache_data(ttl=600, show_spinner="Looking for the bins without features…")(
     project.bins_without_features)
 complete_bins = st.cache_data(ttl=600, show_spinner="Listing the bins…")(project.complete_bins)
+bins_with_blobs = st.cache_data(ttl=600, show_spinner="Listing the blobs…")(project.bins_with_blobs)
 
 
 def rescan():
     scan_project.clear()
     bins_without_features.clear()
     complete_bins.clear()
+    bins_with_blobs.clear()
 
 
 # ---------------------------------------------------------------- page
@@ -521,3 +523,26 @@ elif bins:
         st.caption("Salinity, temperature, chlorophyll a… appear here once they are chosen in section 3.")
     with st.expander("Table of the values plotted"):
         st.dataframe(df, width="stretch", hide_index=True)
+
+st.subheader("Images and their blobs")
+st.caption("The blob is the outline WHOI ifcb-features found in the image: the features are measured on it. Check that "
+           "it covers the particle, not the background or a bubble. Each image is shown above its blob.")
+with_blobs = bins_with_blobs(str(folder))
+if not with_blobs:
+    st.info("No blob yet: they are made by the feature extraction (section 2).")
+else:
+    first = next((b for b in with_blobs if b in flagged), with_blobs[0])  # a bin to check first, if any
+    c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
+    shown = c1.selectbox("Bin", with_blobs, index=with_blobs.index(first), key=f"blob_bin_{folder}",
+                         format_func=lambda b: b + ("  (to check)" if b in flagged else ""))
+    if c2.button("Other images", width="stretch"):
+        st.session_state["blob_seed"] = st.session_state.get("blob_seed", 0) + 1
+    with st.spinner("Reading the images…"):
+        pairs = project.images_and_blobs(str(folder), shown, n=12, seed=st.session_state.get("blob_seed", 0))
+    for start in range(0, len(pairs), 6):
+        for col, (n, image, blob) in zip(st.columns(6), pairs[start:start + 6]):
+            col.image(image, caption=f"ROI {n} · {image.width}×{image.height} px", width="stretch")
+            if blob is not None:
+                col.image(blob, caption="blob", width="stretch")
+            else:
+                col.caption("no blob")

@@ -208,6 +208,40 @@ def check_bins(stats, bin_time):
     return problems
 
 
+def blob_zip(root, bin_name):
+    return os.path.join(root, FEATURES_DIR, "blobs", bin_name[:9], bin_name + "_blobs_v4.zip")
+
+
+def bins_with_blobs(root):
+    """Bins that have a WHOI blobs zip, sorted (one listing of the blobs folder)."""
+    suffix = "_blobs_v4.zip"
+    return sorted(os.path.basename(f)[:-len(suffix)] for f in _files(os.path.join(root, FEATURES_DIR, "blobs"))
+                  if f.endswith(suffix))
+
+
+def images_and_blobs(root, bin_name, n=12, seed=0):
+    """[(roi number, image, blob or None)] for n images of a bin picked at random (seed), read one by one from the
+    .roi file rather than the whole bin; the blobs come from the WHOI blobs zip."""
+    import random
+    import zipfile
+    from PIL import Image
+    from ifcbkit.adc import parse_adc_file
+    from ifcbkit.roi import extract_roi_image
+    path = raw_bin_paths(root, [bin_name])[bin_name]
+    adc = parse_adc_file(bin_name, path + ".adc", extended=True)
+    picked = sorted(random.Random(seed).sample(sorted(adc), min(n, len(adc))))
+    blobs = zipfile.ZipFile(blob_zip(root, bin_name)) if os.path.isfile(blob_zip(root, bin_name)) else None
+    out = []
+    with open(path + ".roi", "rb") as roi:
+        for t in picked:
+            a = adc[t]
+            image = extract_roi_image(roi, a["width"], a["height"], a["offset"]).copy()
+            name = f"{bin_name}_{t:05d}.png"
+            blob = Image.open(blobs.open(name)).copy() if blobs and name in blobs.namelist() else None
+            out.append((t, image, blob))
+    return out
+
+
 def raw_bin_paths(root, bins):
     """{bin: path without extension} for the given bins, from one listing of raw/."""
     wanted, out = set(bins), {}
