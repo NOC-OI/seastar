@@ -286,7 +286,12 @@ def base_cli():
                         if input_def["multiple"]:
                             new_option_arr = []
                             for input_str in options[option_key]:
-                                new_option_arr = new_option_arr + glob.glob(input_str)
+                                matches = glob.glob(input_str)
+                                if (len(matches) == 0) and os.path.exists(input_str):
+                                    matches = [input_str] # A real path that glob reads as a pattern, e.g. with [ ] in it
+                                if len(matches) == 0:
+                                    print("[ERR] No file matches \"" + input_str + "\", check the path")
+                                new_option_arr = new_option_arr + matches
 
                             #print("GLOB RECONSTRUCTION TRIGGER")
                             #print(options[option_key])
