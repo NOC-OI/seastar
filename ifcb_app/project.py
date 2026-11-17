@@ -26,6 +26,18 @@ def whoi_version():
     return dist.version
 
 
+def latest_whoi_release():
+    """(tag, date) of the latest WHOI ifcb-features release on GitHub, e.g. ("v1.3.1", "2026-08-12");
+    None when GitHub cannot be reached (offline, proxy, rate limit)."""
+    from urllib.request import urlopen
+    try:
+        with urlopen("https://api.github.com/repos/WHOIGit/ifcb-features/releases/latest", timeout=5) as r:
+            release = json.load(r)
+        return release["tag_name"], release["published_at"][:10]
+    except Exception:
+        return None
+
+
 VERSIONS_CSV = "feature_extractor_versions.csv"
 
 

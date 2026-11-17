@@ -208,6 +208,12 @@ if not WHOI_VERSION:
     st.stop()
 st.markdown(f"Feature extractor: **WHOI ifcb-features {WHOI_VERSION}** "
             "([github.com/WHOIGit/ifcb-features](https://github.com/WHOIGit/ifcb-features))")
+latest = st.cache_data(ttl=24 * 3600, show_spinner=False)(project.latest_whoi_release)()  # GitHub asked once a day
+if latest and WHOI_VERSION.split(" ")[0] != latest[0]:
+    st.info(f"WHOI published ifcb-features **{latest[0]}** on {latest[1]} "
+            f"([what changed](https://github.com/WHOIGit/ifcb-features/releases/tag/{latest[0]})); this app uses "
+            f"{WHOI_VERSION}. To use it, change the tag in `requirements.txt` and copy the new "
+            "`extract_slim_features.py` into `whoi/`. Keep one version for all the bins of a cruise.")
 st.caption(f"The 30 morphological features of the WHOI MATLAB code, and the blob masks. "
            f"Written to `{project.FEATURES_DIR}/features/<day>/` and `blobs/<day>/`. "
            "Bins that already have a feature file are skipped.")
