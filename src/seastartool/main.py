@@ -260,7 +260,7 @@ def base_cli():
                     elif semantic_type == "SWITCH":
                         input_sig_ed = ""
 
-                    hint_text = input_def["hint"]
+                    hint_text = input_def.get("hint", "") # Some inputs (e.g. --stationid) have no hint
 
                     if "cli_short" in input_def.keys():
                         input_sig = "  -" + input_def["cli_short"] + ", "

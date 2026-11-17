@@ -4,8 +4,7 @@
             "type": "STRING",
             "cli_arg": "project",
             "cli_short": "p",
-            "required": true,
-            "hint": "Project name"
+            "hint": "Name of the project the sample relates to"
         },
         "input_files": {
             "type": "STRING",
@@ -58,11 +57,6 @@
             "type": "STRING",
             "cli_arg": "cruise",
             "hint": "Name of the cruise from when the sample was collected"
-        },
-        "project_name": {
-            "type": "STRING",
-            "cli_arg": "project",
-            "hint": "Name of the project the sample relates to"
         },
         "sample_depth": {
             "type": "INTEGER",
