@@ -90,6 +90,11 @@
             "cli_arg": "scalebars",
             "hint": "Imprint a scale bar into output images"
         },
+        "whitelist_features": {
+            "type": "BOOLEAN",
+            "cli_arg": "whitelistfeatures",
+            "hint": "Only keep the features SeaSTAR knows by name (the previous behaviour) instead of every column of the feature files"
+        },
         "allow_short_names": {
             "type": "BOOLEAN",
             "cli_arg": "reallyignoreshortnames",
