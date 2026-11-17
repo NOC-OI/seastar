@@ -23,6 +23,17 @@ OUTPUT_CSV, OUTPUT_JSON = "metadata_ecotaxa.csv", "metadata_ecotaxa.json"
 BIN_COLUMNS = {"sample_date": "t", "sample_time": "t"}
 
 
+def read_spreadsheet(path, sheet=None):
+    """(rows as dicts, column names) of a CSV (any delimiter) or an Excel sheet (the first one if sheet is None)."""
+    import pandas as pd
+    if str(path).lower().endswith(".csv"):
+        df = pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig", sep=None, engine="python")
+    else:
+        df = pd.read_excel(path, sheet_name=sheet or 0, dtype=object)
+    df.columns = [str(c).strip() for c in df.columns]
+    return df.to_dict("records"), list(df.columns)
+
+
 def load_fields(path=FIELDS_CSV):
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
@@ -225,15 +236,15 @@ def parse_datetime(date, time):
         return None
 
 
-def write_report(log_dir, problems, n_bins, source_file):
-    """log/metadata_check_<date>.txt: a summary by check, then every problem. Returns its path."""
+def write_report(log_dir, problems, n_bins, source_file, name="metadata_check"):
+    """log/<name>_<date>.txt: a summary by check, then every problem. Returns its path."""
     os.makedirs(log_dir, exist_ok=True)
-    path = os.path.join(log_dir, f"metadata_check_{datetime.datetime.now():%Y%m%d_%H%M%S}.txt")
+    path = os.path.join(log_dir, f"{name}_{datetime.datetime.now():%Y%m%d_%H%M%S}.txt")
     counts = {}
     for p in problems:
         counts[p["check"]] = counts.get(p["check"], 0) + 1
     with open(path, "w", encoding="utf-8") as f:
-        f.write(f"Metadata check, {datetime.datetime.now():%Y-%m-%d %H:%M}\nSpreadsheet: {source_file}\n"
+        f.write(f"{name.replace('_', ' ').capitalize()}, {datetime.datetime.now():%Y-%m-%d %H:%M}\nFrom: {source_file}\n"
                 f"{n_bins} bins, {len(problems)} point(s) to check\n\n")
         for check, n in counts.items():
             f.write(f"{n:6d}  {check}\n")

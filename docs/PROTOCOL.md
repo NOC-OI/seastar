@@ -43,13 +43,14 @@ flowchart LR
 |---|---|---|---|
 | 1 · Project | Creates or opens the project folder, counts bins, features and zips per day | ✅ | folders by hand |
 | 2 · Features | Measures 30 morphological features of every image and saves its blob (WHOI MATLAB-compatible) | ✅ | `extract_features.py` |
-| 3 · Sample metadata | Turns the sample spreadsheet into `metadata_ecotaxa.csv`, with the shared EcoTaxa column names, and lists the errors | ✅ | — (app only) |
-| 4 · Quality check | Map, particle concentration and environmental values against time and depth, failed bins, sampling gaps | ✅ | — (app only) |
+| 3 · Sample metadata | Turns the sample spreadsheet into `metadata_ecotaxa.csv`, with the shared EcoTaxa column names, and lists the errors | ✅ | `make_metadata.py` |
+| 4 · Quality check | Map, particle concentration and environmental values against time and depth, failed bins, sampling gaps | ✅ | `make_figures.py` |
 | 5 · EcoTaxa tables | One zip per bin with images, blobs, features, metadata and versions | ✅ | `make_ecotaxa.py` |
 | Compare | Compares the column names and types of the EcoTaxa tables of several projects | ✅ (second page) | Python one-liner |
 
-Steps 3 and 4 need a person to choose and check: they are only in the app. A command-line run of step 5 uses the
-metadata file written by the app in step 3.
+The app and the scripts use the same code and write the same files, so a project can be started in one and finished
+in the other. On the command line nobody looks at the column choices of step 3 before they are used: the script
+prints them, so read them, and read the checks it prints before step 5.
 
 ---
 
@@ -222,8 +223,9 @@ keeps it as a `.txt` file. Run it before importing a new cruise, to see whether 
 ```mermaid
 flowchart LR
     A["Project folder<br/>with raw/"] --> B["python extract_features.py<br/>&lt;project&gt; --workers N"]
-    B --> C["App, step 3<br/>metadata_ecotaxa.csv"]
-    C --> D["python make_ecotaxa.py &lt;project&gt;<br/>--operator … --blobs"]
+    B --> C["python make_metadata.py<br/>&lt;project&gt; &lt;spreadsheet&gt;"]
+    C --> Q["python make_figures.py<br/>&lt;project&gt;"]
+    Q --> D["python make_ecotaxa.py &lt;project&gt;<br/>--operator … --blobs"]
     D --> E["ecotaxa_import_zip_seastar/*.zip"]
     F["Zips made earlier with<br/>seastar ifcb_to_ecotaxa"] --> G["python ecotaxa.py --blobs<br/>&lt;project&gt; &lt;zips&gt;"]
 ```
@@ -237,9 +239,34 @@ python extract_features.py Y:\ifcb_sn225_jc278_pap2025new --workers 14
 - Skips the bins that already have a feature file; safe to run again after a stop.
 - Progress: `log/features_status.json`, details: `log/features_<date>.log`.
 
+### Sample metadata
+
+```bash
+python make_metadata.py Y:\ifcb_sn225_jc278_pap2025new Y:\ifcb_sn225_jc278_pap2025new\metadata\jc278_metadata.xlsx --check-only
+```
+
+- Prints which spreadsheet column fills each EcoTaxa field, then the points to check (the same checks as the app).
+  `--check-only` writes nothing: correct the spreadsheet and run it again until the list is empty or explained.
+- The columns come from, in this order: `--map FIELD=COLUMN` and `--default FIELD=VALUE`; the choices saved by the
+  app or an earlier run for the same spreadsheet; the columns whose names look like the field. For example
+  `--map depth_min="Depth (m)" --map depth_max="Depth (m)" --default depth_min=5`. `--map chla=` leaves a field out.
+- Without `--check-only`, writes `metadata/metadata_ecotaxa.csv` and `log/metadata_check_<date>.txt`.
+- `--sheet NAME` for an Excel sheet other than the first, `--bin-column COLUMN` if the bin names are not found.
+  Without a spreadsheet path, it uses the one of the last run.
+
+### Quality check figures
+
+```bash
+python make_figures.py Y:\ifcb_sn225_jc278_pap2025new
+```
+
+- Saves the map and the figures as PNG in `figures/`, and the bins that look failed and the gaps in the sampling in
+  `log/bins_check_<date>.txt`; prints the list.
+- Uses the image counts made by the feature extraction; bins not counted yet are counted first (slow on Y:\).
+
 ### EcoTaxa zips
 
-Write the metadata file with the app (step 3) first, then:
+After the metadata file (step 3):
 
 ```bash
 python make_ecotaxa.py Y:\ifcb_sn225_jc278_pap2025new ^

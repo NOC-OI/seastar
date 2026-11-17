@@ -18,6 +18,7 @@ import streamlit as st
 import make_ecotaxa
 import metadata
 import project
+import qc
 from ui import DEFAULT_PARENT, folder_input
 
 REPO = Path(__file__).resolve().parent
@@ -283,12 +284,7 @@ def browse_file(key):
 
 @st.cache_data(show_spinner="Reading the spreadsheet…")
 def read_sheet(path, sheet, mtime):  # mtime: read again when the file changes
-    if path.lower().endswith(".csv"):
-        df = pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig", sep=None, engine="python")
-    else:
-        df = pd.read_excel(path, sheet_name=sheet, dtype=object)
-    df.columns = [str(c).strip() for c in df.columns]
-    return df.to_dict("records"), list(df.columns)
+    return metadata.read_spreadsheet(path, sheet)
 
 
 @st.cache_data
@@ -411,7 +407,6 @@ with st.expander("Add an EcoTaxa column to the list"):
 
 
 # ---------------------------------------------------------------- 4 · quality check figures
-SERIES, TO_CHECK = "#2a78d6", "#eb6834"  # blue: bins; orange: bins with a point to check
 
 
 def known_stats(root):
@@ -438,16 +433,6 @@ if todo and not st.session_state.get(f"count_{folder}"):
 elif bins:
     with st.spinner(f"Counting the images of {len(todo)} bin(s)…" if todo else "Reading the image counts…"):
         stats = project.bin_stats(str(folder), bins)
-    df = pd.DataFrame([{"bin": b, "time": metadata.bin_time(b), **s} for b, s in stats.items()])
-    labels = {c: f"{f['field']} ({f['unit']})" if f["unit"] else f["field"]
-              for f in metadata.load_fields() for c in f["ecotaxa_columns"].split(";")}
-    numeric = [c for c, f in ((c, f) for f in metadata.load_fields() for c in f["ecotaxa_columns"].split(";"))
-               if f["type"] == "f"]
-    if meta_rows:
-        meta = pd.DataFrame(meta_rows)
-        keep = [c for c in meta.columns if c in numeric]
-        meta[keep] = meta[keep].apply(pd.to_numeric, errors="coerce")
-        df = df.merge(meta[["bin"] + keep], on="bin", how="left")
     bin_problems = project.check_bins(stats, metadata.bin_time)
     if bin_problems:
         summary = pd.Series([p["check"] for p in bin_problems]).value_counts()
@@ -456,76 +441,35 @@ elif bins:
                    "before the EcoTaxa tables.")
         st.dataframe(pd.DataFrame(bin_problems).drop(columns="spreadsheet row"), width="stretch", hide_index=True)
     flagged = flagged | {p["bin"] for p in bin_problems if p["check"] != "Gap in the sampling"}
-    df["status"] = ["to check" if b in flagged else "ok" for b in df["bin"]]
+    df, variables, depth = qc.frame(stats, meta_rows, flagged)
+    figures = qc.charts(df, variables, depth)
 
-    import altair as alt
-    tooltip = ["bin", alt.Tooltip("time:T", format="%Y-%m-%d %H:%M"), alt.Tooltip("rois_per_ml:Q", format=".0f"),
-               "rois", alt.Tooltip("ml_analyzed:Q", format=".2f"), "status"]
-    color = alt.Color("status:N", scale=alt.Scale(domain=["ok", "to check"], range=[SERIES, TO_CHECK]),
-                      legend=alt.Legend(title=None, orient="top"))
-
-    def scatter(data, x, y, x_title, y_title, reverse_y=False):
-        x_axis = (alt.X(x, title=x_title, axis=alt.Axis(format="%d %b %H:%M", labelAngle=-30)) if x.endswith(":T")
-                  else alt.X(x, title=x_title, scale=alt.Scale(zero=False)))
-        return (alt.Chart(data).mark_circle(size=60, opacity=0.8).encode(
-            x=x_axis, y=alt.Y(y, title=y_title, scale=alt.Scale(reverse=reverse_y, zero=False)),
-            color=color, tooltip=tooltip + [c for c in (y.split(":")[0], x.split(":")[0]) if c not in ("time", "rois_per_ml")])
-            .properties(height=260).interactive())
-
-    figures = {}  # file name in figures/ -> (title, chart), saved as PNG below
-    if {"object_lat", "object_lon"} <= set(df.columns) and df["object_lat"].notna().any():
+    if "qc_map.png" in figures:
         st.subheader("Map")
         pos = df.dropna(subset=["object_lat", "object_lon"])
-        st.map(pos.assign(color=[TO_CHECK if s == "to check" else SERIES for s in pos["status"]]),
+        st.map(pos.assign(color=[qc.TO_CHECK if s == "to check" else qc.SERIES for s in pos["status"]]),
                latitude="object_lat", longitude="object_lon", color="color", size=400)
         st.caption(f"{len(pos)} bin{'s' if len(pos) > 1 else ''} with a position · blue: no problem · orange: a point to check in section 3")
-        figures["qc_map.png"] = ("Sample positions (longitude, latitude)", alt.Chart(pos).mark_circle(size=60, opacity=0.8).encode(
-            x=alt.X("object_lon:Q", title="Longitude (degrees E)", scale=alt.Scale(zero=False)),
-            y=alt.Y("object_lat:Q", title="Latitude (degrees N)", scale=alt.Scale(zero=False)),
-            color=color, tooltip=tooltip).properties(height=450))
-
-    depth = "sample_depth_min" if "sample_depth_min" in df.columns and df["sample_depth_min"].notna().any() else None
-    variables = [("rois_per_ml", "Particle concentration (images mL-1)")] + [
-        (c, labels[c]) for c in df.columns if c in numeric and c.startswith("sample_") and "depth" not in c
-        and df[c].notna().any()]
     st.subheader("Against time and depth")
     st.caption("One row per variable: against the time the IFCB analysed the bin (left) and against depth (right). "
                "Hover a point to see its bin. Drag to pan, scroll to zoom.")
     for c, title in variables:
         left, right = st.columns(2)
-        figures[f"qc_{c}_time.png"] = (f"{title} against time", scatter(df, "time:T", f"{c}:Q", "Time (UTC)", title))
         left.altair_chart(figures[f"qc_{c}_time.png"][1], width="stretch")
         if depth:
-            figures[f"qc_{c}_depth.png"] = (f"{title} against depth",
-                                            scatter(df, f"{c}:Q", f"{depth}:Q", title, "Depth (m)", reverse_y=True))
             right.altair_chart(figures[f"qc_{c}_depth.png"][1], width="stretch")
     if len(variables) == 1:
         st.caption("Salinity, temperature, chlorophyll a… appear here once they are chosen in section 3.")
     with st.expander("Table of the values plotted"):
         st.dataframe(df, width="stretch", hide_index=True)
 
-    # The same figures as PNG in figures/, written again only when the data change
-    import hashlib
-    fig_dir = folder / "figures"
-    signature = hashlib.sha1((df.to_csv() + ",".join(sorted(figures))).encode()).hexdigest()
-    try:
-        saved_figures = json.loads((fig_dir / "qc_figures.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        saved_figures = {}
-    if saved_figures.get("signature") != signature:
-        try:
-            with st.spinner(f"Saving the {len(figures)} figures in figures/…"):
-                fig_dir.mkdir(exist_ok=True)
-                for name, (title, chart) in figures.items():
-                    chart.properties(width=700, title=f"{folder.name} · {title}").save(str(fig_dir / name), scale_factor=2)
-                saved_figures = {"signature": signature, "saved": datetime.now().isoformat(timespec="seconds"),
-                                 "files": sorted(figures)}
-                (fig_dir / "qc_figures.json").write_text(json.dumps(saved_figures, indent=1), encoding="utf-8")
-        except Exception as e:  # e.g. vl-convert not installed yet: the page still works
-            st.caption(f":orange[The figures could not be saved in figures/: {e}]")
-    if saved_figures.get("signature") == signature:
+    try:  # the same figures as PNG in figures/, written again only when the data change
+        with st.spinner("Saving the figures in figures/…"):
+            saved_figures = qc.save(folder, figures, df)
         st.caption(f"These figures are saved as PNG in `figures/` ({len(saved_figures['files'])} files, "
                    f"{saved_figures['saved'].replace('T', ' ')}).")
+    except Exception as e:  # e.g. vl-convert not installed yet: the page still works
+        st.caption(f":orange[The figures could not be saved in figures/: {e}]")
 
 st.subheader("Images and their blobs")
 st.caption("The blob is the outline WHOI ifcb-features found in the image: the features are measured on it. Check that "
