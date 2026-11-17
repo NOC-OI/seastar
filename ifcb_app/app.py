@@ -1,6 +1,8 @@
 """IFCB -> EcoTaxa pipeline in the browser.
 Section 1: create a new IFCB project or open an existing one. Section 2: extract the features (WHOI v1.3.1).
 Section 3: the sample metadata, with the EcoTaxa column names of metadata_columns.csv.
+Section 4: quality check figures (map, particle concentration and environmental values against time and depth),
+before the EcoTaxa tables, so that problems are corrected first.
 
 Start it with start_ifcb_app.bat (Windows) or:  python -m streamlit run app.py
 Everything runs on this computer; no data leaves it.
@@ -325,12 +327,12 @@ def add_new_field():
     s = st.session_state
     try:
         metadata.add_field(s["nf_field"], s["nf_column"], "f" if s["nf_type"].startswith("Number") else "t",
-                           s["nf_unit"], s["nf_default"], s["nf_description"])
+                           s["nf_unit"], s["nf_default"], s["nf_description"], s["nf_min"], s["nf_max"])
     except ValueError as e:
-        s["nf_message"] = ("error", str(e))
+        s["nf_message"] = ("error", str(e) if "convert" not in str(e) else "The expected values must be numbers")
         return
     s["nf_message"] = ("success", f"Added {s['nf_column']}: it is now in the list of every project.")
-    for k in ("nf_field", "nf_column", "nf_unit", "nf_default", "nf_description"):
+    for k in ("nf_field", "nf_column", "nf_unit", "nf_default", "nf_description", "nf_min", "nf_max"):
         s[k] = ""
 
 
@@ -357,6 +359,7 @@ if saved:
     st.caption(f"Metadata file last written {saved['written'].replace('T', ' ')}: "
                f"`metadata/{metadata.OUTPUT_CSV}` ({len(saved['columns'])} columns).")
 
+meta_rows, flagged = None, set()
 if ok:
     mtime = sheet_path.stat().st_mtime
     sheet = None
@@ -366,13 +369,14 @@ if ok:
     with st.expander(f"Spreadsheet: {len(rows)} rows, {len(columns)} columns"):
         st.dataframe(pd.DataFrame(rows[:50], columns=columns).astype(str), width="stretch", hide_index=True)
 
-    bin_guess = metadata.guess_bin_column(columns, rows)
+    same_file = saved.get("source_file") == str(sheet_path)  # the choices saved apply to that spreadsheet only
+    bin_guess = saved.get("bin_column") if same_file else metadata.guess_bin_column(columns, rows)
     bin_column = st.selectbox("Column with the bin name", columns,
-                              index=columns.index(saved.get("bin_column", bin_guess)) if saved.get("bin_column", bin_guess) in columns else 0,
+                              index=columns.index(bin_guess) if bin_guess in columns else 0,
                               help="Links each row to the images of that bin")
 
     fields = metadata.load_fields()
-    old = saved.get("mapping", {})
+    old = saved.get("mapping", {}) if same_file else {}
     table = pd.DataFrame([{
         "Field": f["field"],
         "EcoTaxa columns": f["ecotaxa_columns"].replace(";", ", "),
@@ -393,13 +397,23 @@ if ok:
     out_columns, out, problems = metadata.build(rows, bin_column, mapping, bins)
     st.markdown(f"**{len(out)} bins** · EcoTaxa columns: " + ", ".join(f"`{c}`" for c in out_columns if c != "bin"))
     if problems:
-        st.warning(f"{len(problems)} point(s) to check:")
-        st.code("\n".join(problems[:200]), language=None)
+        summary = pd.Series([p["check"] for p in problems]).value_counts()
+        st.warning(f"**{len(problems)} point(s) to check** before the EcoTaxa tables: "
+                   + " · ".join(f"{check} ({n})" for check, n in summary.items())
+                   + ". Correct the spreadsheet, then choose it again.")
+        st.dataframe(pd.DataFrame(problems), width="stretch", hide_index=True,
+                     column_config={"check": st.column_config.TextColumn("Check", width="medium"),
+                                    "detail": st.column_config.TextColumn("Detail", width="large")})
+    else:
+        st.success("No problem found in the spreadsheet.")
     with st.expander("Preview of the metadata file"):
         st.dataframe(pd.DataFrame(out[:200]), width="stretch", hide_index=True)
     if st.button("Write the metadata file", type="primary", disabled=not out):
         metadata.write(meta_dir, out_columns, out, mapping, str(sheet_path), bin_column)
-        st.success(f"Written: `metadata/{metadata.OUTPUT_CSV}`, {len(out)} bins, {len(out_columns) - 1} columns.")
+        report = metadata.write_report(str(folder / "log"), problems, len(out), str(sheet_path))
+        st.success(f"Written: `metadata/{metadata.OUTPUT_CSV}`, {len(out)} bins, {len(out_columns) - 1} columns. "
+                   f"Check report: `log/{Path(report).name}`.")
+    meta_rows, flagged = out, {p["bin"] for p in problems if p["bin"]}
 
 with st.expander("Add an EcoTaxa column to the list"):
     st.caption("For a measurement that is not in the list yet. It is added for every future project "
@@ -413,7 +427,88 @@ with st.expander("Add an EcoTaxa column to the list"):
     c1.text_input("Unit", key="nf_unit", placeholder="umol kg-1")
     c2.text_input("Value if empty (optional)", key="nf_default")
     c3.text_input("Description", key="nf_description", placeholder="Dissolved oxygen")
+    c1, c2, _ = st.columns(3)
+    c1.text_input("Lowest expected value (optional)", key="nf_min", placeholder="0",
+                  help="Values outside the expected range are listed in the checks")
+    c2.text_input("Highest expected value (optional)", key="nf_max", placeholder="400")
     st.button("Add the column", on_click=add_new_field)
     if st.session_state.get("nf_message"):
         kind, text = st.session_state.pop("nf_message")
         (st.error if kind == "error" else st.success)(text)
+
+
+# ---------------------------------------------------------------- 4 · quality check figures
+SERIES, TO_CHECK = "#2a78d6", "#eb6834"  # blue: bins; orange: bins with a point to check
+
+
+def known_stats(root):
+    """Bins already counted in log/bin_stats.csv (reading the others means reading their .adc files)."""
+    path = Path(root) / "log" / project.STATS_CSV
+    return set(pd.read_csv(path, usecols=["bin"])["bin"]) if path.is_file() else set()
+
+
+st.header("4 · Quality check figures")
+st.caption("Look at the data before making the EcoTaxa tables: a point far from the others is often a typo. "
+           "Particle concentration = images of the bin / volume analysed (0.25 mL/min × (runTime − inhibitTime), "
+           "from the .hdr). Environmental values and depth come from section 3.")
+if meta_rows is None and (meta_dir / metadata.OUTPUT_CSV).is_file():
+    meta_rows = pd.read_csv(meta_dir / metadata.OUTPUT_CSV, dtype=str, keep_default_na=False).to_dict("records")
+bins = complete_bins(str(folder))
+todo = sorted(set(bins) - known_stats(folder))
+if todo and not st.session_state.get(f"count_{folder}"):
+    st.info(f"The images of {len(todo)} bin(s) are not counted yet: it reads their .adc files once "
+            "(a few minutes for a whole cruise on the network drive), then they are kept in `log/bin_stats.csv`.")
+    if st.button("Count the images", type="primary"):
+        st.session_state[f"count_{folder}"] = True
+        st.rerun()
+elif bins:
+    with st.spinner(f"Counting the images of {len(todo)} bin(s)…" if todo else "Reading the image counts…"):
+        stats = project.bin_stats(str(folder), bins)
+    df = pd.DataFrame([{"bin": b, "time": metadata.bin_time(b), **s} for b, s in stats.items()])
+    labels = {c: f"{f['field']} ({f['unit']})" if f["unit"] else f["field"]
+              for f in metadata.load_fields() for c in f["ecotaxa_columns"].split(";")}
+    numeric = [c for c, f in ((c, f) for f in metadata.load_fields() for c in f["ecotaxa_columns"].split(";"))
+               if f["type"] == "f"]
+    if meta_rows:
+        meta = pd.DataFrame(meta_rows)
+        keep = [c for c in meta.columns if c in numeric]
+        meta[keep] = meta[keep].apply(pd.to_numeric, errors="coerce")
+        df = df.merge(meta[["bin"] + keep], on="bin", how="left")
+    df["status"] = ["to check" if b in flagged else "ok" for b in df["bin"]]
+
+    import altair as alt
+    tooltip = ["bin", alt.Tooltip("time:T", format="%Y-%m-%d %H:%M"), alt.Tooltip("rois_per_ml:Q", format=".0f"),
+               "rois", alt.Tooltip("ml_analyzed:Q", format=".2f"), "status"]
+    color = alt.Color("status:N", scale=alt.Scale(domain=["ok", "to check"], range=[SERIES, TO_CHECK]),
+                      legend=alt.Legend(title=None, orient="top"))
+
+    def scatter(data, x, y, x_title, y_title, reverse_y=False):
+        return (alt.Chart(data).mark_circle(size=60, opacity=0.8).encode(
+            x=alt.X(x, title=x_title), y=alt.Y(y, title=y_title, scale=alt.Scale(reverse=reverse_y, zero=False)),
+            color=color, tooltip=tooltip + [c for c in (y.split(":")[0], x.split(":")[0]) if c not in ("time", "rois_per_ml")])
+            .properties(height=260).interactive())
+
+    if {"object_lat", "object_lon"} <= set(df.columns) and df["object_lat"].notna().any():
+        st.subheader("Map")
+        pos = df.dropna(subset=["object_lat", "object_lon"])
+        st.map(pos.assign(color=[TO_CHECK if s == "to check" else SERIES for s in pos["status"]]),
+               latitude="object_lat", longitude="object_lon", color="color", size=400)
+        st.caption(f"{len(pos)} bin{'s' if len(pos) > 1 else ''} with a position · blue: no problem · orange: a point to check in section 3")
+
+    depth = "sample_depth_min" if "sample_depth_min" in df.columns and df["sample_depth_min"].notna().any() else None
+    variables = [("rois_per_ml", "Particle concentration (images mL-1)")] + [
+        (c, labels[c]) for c in df.columns if c in numeric and c.startswith("sample_") and "depth" not in c
+        and df[c].notna().any()]
+    st.subheader("Against time and depth")
+    st.caption("One row per variable: against the time the IFCB analysed the bin (left) and against depth (right). "
+               "Hover a point to see its bin. Drag to pan, scroll to zoom.")
+    for c, title in variables:
+        left, right = st.columns(2)
+        left.altair_chart(scatter(df, "time:T", f"{c}:Q", "Time (UTC)", title), width="stretch")
+        if depth:
+            right.altair_chart(scatter(df, f"{c}:Q", f"{depth}:Q", title, "Depth (m)", reverse_y=True),
+                               width="stretch")
+    if len(variables) == 1:
+        st.caption("Salinity, temperature, chlorophyll a… appear here once they are chosen in section 3.")
+    with st.expander("Table of the values plotted"):
+        st.dataframe(df, width="stretch", hide_index=True)

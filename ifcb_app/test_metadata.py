@@ -41,9 +41,9 @@ def test_build():
     assert r3["object_depth_min"] == "5" and r3["object_lat"] == ""  # bin not in the spreadsheet
     assert r1["sample_niskin_id"] == "21"
     assert r2["sample_salinity_pss"] == ""
-    assert any("n/a" in p for p in problems)
-    assert any("not in the spreadsheet" in p for p in problems)
-    assert any("not in raw/" in p for p in problems)
+    checks = {p["check"] for p in problems}
+    assert any("n/a" in p["detail"] for p in problems)
+    assert "Bin without metadata" in checks and "Bin not in raw/" in checks
     assert "sample_niskin_date:t:sample_niskin_date" in metadata.bindcol_args(columns)
 
 
@@ -64,7 +64,32 @@ def test_add_field():
     shutil.rmtree(tmp)
 
 
+def test_checks():
+    """Typo in a bin name, out of range, position jump, Niskin after analysis."""
+    bins = [B1, B2, B3]
+    rows = [{"bin": "D20250610T081200_IFCB225", "lat": "48.9", "lon": "-16.5", "sal": "35.4", "nd": "", "nt": ""},  # B1 typed 3 min early
+            {"bin": B2, "lat": "48.9", "lon": "-16.5", "sal": "350", "nd": "20250610", "nt": "101500"},  # sal x10, Niskin after
+            {"bin": B3, "lat": "84.9", "lon": "-16.5", "sal": "35.4", "nd": "2025-06-11", "nt": "06:00"}]  # lat typo: jump
+    mapping = {"lat": {"source": "lat"}, "lon": {"source": "lon"}, "salinity": {"source": "sal"},
+               "niskin_date": {"source": "nd"}, "niskin_time": {"source": "nt"}}
+    columns, out, problems = metadata.build(rows, "bin", mapping, bins)
+    by_check = {p["check"]: p for p in problems}
+    assert "probably " + B1 in by_check["Bin name typo?"]["detail"] and "3 min" in by_check["Bin name typo?"]["detail"]
+    assert "Bin without metadata" not in by_check  # B1 is explained by the typo, not reported twice
+    assert by_check["Out of range"]["bin"] == B2
+    assert by_check["Niskin after analysis"]["bin"] == B2
+    assert by_check["Position jump"]["bin"] == B3
+    assert metadata.parse_datetime("20250610", "070500") == datetime.datetime(2025, 6, 10, 7, 5)
+    assert metadata.parse_datetime("", "07:05") is None
+    tmp = tempfile.mkdtemp()
+    path = metadata.write_report(tmp, problems, len(out), "test.xlsx")
+    text = open(path, encoding="utf-8").read()
+    assert "Bin name typo?" in text and "4 point(s)" in text, text
+    shutil.rmtree(tmp)
+
+
 if __name__ == "__main__":
     test_build()
+    test_checks()
     test_add_field()
     print("ok")

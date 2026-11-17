@@ -134,6 +134,48 @@ def bins_without_features(root):
     return [b for b in complete_bins(root) if b not in done]
 
 
+FLOW_ML_PER_MIN = 0.25  # IFCB sample flow rate, as in WHOI's ml_analyzed
+STATS_CSV = "bin_stats.csv"
+
+
+def bin_stats(root, bins):
+    """{bin: {"rois": images, "ml_analyzed": mL, "rois_per_ml": concentration}} from the .adc and .hdr files.
+    Kept in log/bin_stats.csv: each bin is read once, the raw files of a bin do not change."""
+    from ifcbkit.adc import parse_adc_file
+    from ifcbkit.header import parse_hdr
+    path = os.path.join(root, "log", STATS_CSV)
+    stats = {}
+    if os.path.isfile(path):
+        with open(path, newline="", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                stats[r["bin"]] = {k: float(r[k]) for k in ("rois", "ml_analyzed", "rois_per_ml")}
+    new = [b for b in bins if b not in stats]
+    raw = raw_bin_paths(root, new)
+    for b in new:
+        with open(raw[b] + ".hdr", encoding="utf-8", errors="replace") as f:
+            hdr = parse_hdr(f.read().splitlines())
+        ml = FLOW_ML_PER_MIN * (float(hdr.get("runTime", 0)) - float(hdr.get("inhibitTime", 0))) / 60
+        n = len(parse_adc_file(b, raw[b] + ".adc"))
+        stats[b] = {"rois": n, "ml_analyzed": round(ml, 4), "rois_per_ml": round(n / ml, 2) if ml > 0 else float("nan")}
+    if new:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["bin", "rois", "ml_analyzed", "rois_per_ml"])
+            w.writerows([b, s["rois"], s["ml_analyzed"], s["rois_per_ml"]] for b, s in sorted(stats.items()))
+    return {b: stats[b] for b in bins}
+
+
+def raw_bin_paths(root, bins):
+    """{bin: path without extension} for the given bins, from one listing of raw/."""
+    wanted, out = set(bins), {}
+    for f in _files(os.path.join(root, "raw")):
+        name = os.path.splitext(os.path.basename(f))[0]
+        if name in wanted:
+            out[name] = os.path.splitext(f)[0]
+    return out
+
+
 def scan_project(root):
     """Summarise an existing project: which standard folders exist, and per day how many
     bins, feature files, EcoTaxa zips there are."""

@@ -16,7 +16,7 @@ import re
 import project
 
 FIELDS_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metadata_columns.csv")
-FIELD_KEYS = ["field", "ecotaxa_columns", "type", "unit", "default", "description"]
+FIELD_KEYS = ["field", "ecotaxa_columns", "type", "unit", "default", "min", "max", "description"]
 COLUMN_RE = re.compile(r"(sample|object|acq|process)_[a-z0-9_]+")
 OUTPUT_CSV, OUTPUT_JSON = "metadata_ecotaxa.csv", "metadata_ecotaxa.json"
 # From the bin name, as SeaSTAR writes object_date/object_time: the time the IFCB analysed the sample
@@ -28,7 +28,7 @@ def load_fields(path=FIELDS_CSV):
         return list(csv.DictReader(f))
 
 
-def add_field(field, ecotaxa_column, type_, unit="", default="", description="", path=FIELDS_CSV):
+def add_field(field, ecotaxa_column, type_, unit="", default="", description="", min_="", max_="", path=FIELDS_CSV):
     """Add a field to the list kept for every future project. Returns the new list."""
     fields = load_fields(path)
     field, ecotaxa_column = field.strip().lower(), ecotaxa_column.strip().lower()
@@ -44,7 +44,11 @@ def add_field(field, ecotaxa_column, type_, unit="", default="", description="",
     used = {c for f in fields for c in f["ecotaxa_columns"].split(";")} | set(BIN_COLUMNS)
     if ecotaxa_column in used:
         raise ValueError(f"The EcoTaxa column {ecotaxa_column} is already used")
-    fields.append(dict(zip(FIELD_KEYS, [field, ecotaxa_column, type_, unit.strip(), default.strip(), description.strip()])))
+    for bound in (min_, max_):
+        if bound.strip():
+            float(bound)  # ValueError if the bound is not a number
+    fields.append(dict(zip(FIELD_KEYS, [field, ecotaxa_column, type_, unit.strip(), default.strip(),
+                                        min_.strip(), max_.strip(), description.strip()])))
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, FIELD_KEYS)
         w.writeheader()
@@ -101,26 +105,38 @@ def build(rows, bin_column, mapping, bins):
         for c in f["ecotaxa_columns"].split(";"):
             columns[c] = f["type"]
     problems = []
+
+    def problem(check, bin_, detail, row=None):
+        problems.append({"check": check, "bin": bin_, "spreadsheet row": row or "", "detail": detail})
+
     by_bin = {}
     for i, r in enumerate(rows, start=2):  # row 1 is the header in the spreadsheet
         m = project.BIN_RE.search(as_text(r.get(bin_column)))
         if not m:
+            if any(as_text(v) for v in r.values()):
+                problem("No bin name", "", f"{as_text(r.get(bin_column))!r} in column {bin_column}", i)
             continue
         if m.group() in by_bin:
-            problems.append(f"{m.group()}: in several rows of the spreadsheet (rows {by_bin[m.group()][0]} and {i}), the first is used")
+            problem("Same bin in several rows", m.group(), f"also in row {by_bin[m.group()][0]}: the first row is used", i)
             continue
         by_bin[m.group()] = (i, r)
-    missing = sorted(set(bins) - set(by_bin))
-    if missing:
-        problems.append(f"{len(missing)} bin(s) of raw/ are not in the spreadsheet: only the constant values are used "
-                        f"for them (e.g. {', '.join(missing[:3])})")
-    unknown = sorted(set(by_bin) - set(bins))
-    if unknown:
-        problems.append(f"{len(unknown)} bin(s) of the spreadsheet are not in raw/ and are left out (e.g. {', '.join(unknown[:3])})")
+
+    # A bin name that is not in raw/ is most often a typo of a bin that has no row: pair them by time
+    missing = set(bins) - set(by_bin)
+    for b in sorted(set(by_bin) - set(bins)):
+        near = nearest_bin(b, missing)
+        if near:
+            missing.discard(near[0])
+            problem("Bin name typo?", b, f"not in raw/; probably {near[0]} ({near[1]} apart), which has no row. "
+                    "Correct the spreadsheet", by_bin[b][0])
+        else:
+            problem("Bin not in raw/", b, "no bin of raw/ close in time: left out", by_bin[b][0])
+    for b in sorted(missing):
+        problem("Bin without metadata", b, "not in the spreadsheet: only the values 'If empty' are used")
 
     out = []
     for b in sorted(bins):
-        dt = datetime.datetime.strptime(b.split("_")[0], "D%Y%m%dT%H%M%S")
+        dt = bin_time(b)
         row = {"bin": b, "sample_date": dt.strftime("%Y-%m-%d"), "sample_time": dt.strftime("%H:%M:%S")}
         line, r = by_bin.get(b, (None, {}))
         for f in fields:
@@ -130,15 +146,97 @@ def build(rows, bin_column, mapping, bins):
                 v = m.get("default", "").strip()
             if v and f["type"] == "f":
                 try:
-                    if not math.isfinite(float(v)):
+                    x = float(v)
+                    if not math.isfinite(x):
                         raise ValueError
                 except ValueError:
-                    problems.append(f"{b}: {f['field']} = {v!r} is not a number (spreadsheet row {line}), left empty")
+                    problem("Not a number", b, f"{f['field']} = {v!r}: left empty", line)
                     v = ""
+                else:
+                    if (f.get("min") and x < float(f["min"])) or (f.get("max") and x > float(f["max"])):
+                        problem("Out of range", b, f"{f['field']} = {v} {f['unit']}, expected {f['min']} to {f['max']}", line)
             for c in f["ecotaxa_columns"].split(";"):
                 row[c] = v
+        niskin = parse_datetime(row.get("sample_niskin_date", ""), row.get("sample_niskin_time", ""))
+        if niskin and niskin > dt:
+            problem("Niskin after analysis", b, f"Niskin {niskin:%Y-%m-%d %H:%M} is after the IFCB analysis {dt:%Y-%m-%d %H:%M}", line)
         out.append(row)
+    check_track(out, problem)
     return columns, out, problems
+
+
+MAX_SHIP_KNOTS = 20  # faster than any research ship: one of the two positions is wrong
+
+
+def check_track(out, problem):
+    """Position jumps between consecutive bins that no ship could make: a typo in lat or lon."""
+    fixes = []
+    for r in out:
+        try:
+            fixes.append((bin_time(r["bin"]), float(r["object_lat"]), float(r["object_lon"]), r["bin"]))
+        except (KeyError, ValueError):
+            pass
+    for (t1, la1, lo1, b1), (t2, la2, lo2, b2) in zip(fixes, fixes[1:]):
+        nm = distance_nm(la1, lo1, la2, lo2)
+        hours = max((t2 - t1).total_seconds() / 3600, 1 / 60)
+        if nm > 1 and nm / hours > MAX_SHIP_KNOTS:
+            problem("Position jump", b2, f"{nm:.0f} nautical miles from {b1} in {hours:.1f} h ({nm / hours:.0f} knots): "
+                    "check lat/lon of both bins")
+
+
+def distance_nm(lat1, lon1, lat2, lon2):
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = (math.sin((p2 - p1) / 2) ** 2
+         + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2)
+    return 2 * 3440.065 * math.asin(math.sqrt(min(1, a)))
+
+
+def bin_time(bin_name):
+    return datetime.datetime.strptime(bin_name.split("_")[0], "D%Y%m%dT%H%M%S")
+
+
+def nearest_bin(bin_name, candidates, max_hours=24):
+    """(candidate, 'time apart') of the same instrument closest in time, within max_hours; else None."""
+    t, serial = bin_time(bin_name), bin_name.split("_")[1]
+    same = [c for c in candidates if c.split("_")[1] == serial]
+    if not same:
+        return None
+    best = min(same, key=lambda c: abs((bin_time(c) - t).total_seconds()))
+    s = abs((bin_time(best) - t).total_seconds())
+    if s > max_hours * 3600:
+        return None
+    apart = f"{s:.0f} s" if s < 60 else f"{s / 60:.0f} min" if s < 3600 else f"{s / 3600:.1f} h"
+    return best, apart
+
+
+def parse_datetime(date, time):
+    """'2025-06-10' or '20250610' with '07:05', '07:05:00' or '070500'; None if absent or not readable."""
+    d = re.fullmatch(r"(\d{4})-?(\d{2})-?(\d{2})", date.strip())
+    t = re.fullmatch(r"(\d{1,2}):?(\d{2})(?::?(\d{2}))?", time.strip())
+    if not d or not t:
+        return None
+    try:
+        return datetime.datetime(*map(int, d.groups()), int(t.group(1)), int(t.group(2)), int(t.group(3) or 0))
+    except ValueError:
+        return None
+
+
+def write_report(log_dir, problems, n_bins, source_file):
+    """log/metadata_check_<date>.txt: a summary by check, then every problem. Returns its path."""
+    os.makedirs(log_dir, exist_ok=True)
+    path = os.path.join(log_dir, f"metadata_check_{datetime.datetime.now():%Y%m%d_%H%M%S}.txt")
+    counts = {}
+    for p in problems:
+        counts[p["check"]] = counts.get(p["check"], 0) + 1
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"Metadata check, {datetime.datetime.now():%Y-%m-%d %H:%M}\nSpreadsheet: {source_file}\n"
+                f"{n_bins} bins, {len(problems)} point(s) to check\n\n")
+        for check, n in counts.items():
+            f.write(f"{n:6d}  {check}\n")
+        f.write("\n")
+        for p in problems:
+            f.write(f"{p['check']}\t{p['bin'] or '-'}\trow {p['spreadsheet row'] or '-'}\t{p['detail']}\n")
+    return path
 
 
 def write(metadata_dir, columns, out, mapping, source_file, bin_column):

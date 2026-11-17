@@ -21,6 +21,15 @@ def test_create_and_scan():
         open(feat, "w").close()
         assert project.bins_without_features(root) == []
 
+        with open(os.path.join(day, "D20260802T010203_IFCB225.hdr"), "w") as f:
+            f.write("softwareVersion: 1.0\nrunTime: 1260\ninhibitTime: 60\n")
+        with open(os.path.join(day, "D20260802T010203_IFCB225.adc"), "w") as f:  # 2 images, 1 trigger without image
+            f.write("\n".join(",".join(["1"] * 13 + [x, x, w, w] + ["0"] * 7) for x, w in
+                              (("1", "10"), ("1", "0"), ("2", "12"))))
+        stats = project.bin_stats(root, ["D20260802T010203_IFCB225"])["D20260802T010203_IFCB225"]
+        assert stats == {"rois": 2, "ml_analyzed": 5.0, "rois_per_ml": 0.4}, stats  # 0.25 mL/min x 20 min
+        assert os.path.isfile(os.path.join(root, "log", project.STATS_CSV))
+
         s = project.scan_project(root)
         assert s["days"]["D20260802"] == {"bins": 2, "complete_bins": 1, "features": 1, "ecotaxa_zips": 0}
         assert s["name_info"] == {"serial": "225", "cruise_id": "ce26008", "cruise_name": "ar7e"}
