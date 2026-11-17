@@ -72,7 +72,8 @@ def compare_report(headers):
             for s, files in sets[name].items():
                 if s != base:
                     lines.append(f"    {len(files)} table(s) differ from the {len(sets[name][base])} others "
-                                 f"(e.g. {files[0]}): + {sorted(s - base) or '-'}  - {sorted(base - s) or '-'}")
+                                 f"(e.g. {files[0]}): extra columns {sorted(s - base) or 'none'}, "
+                                 f"missing columns {sorted(base - s) or 'none'}")
     every = {n: frozenset().union(*s) for n, s in sets.items() if s}  # all the columns of each project
     if not every:
         return "\n".join(lines + ["", "No EcoTaxa table found."])
