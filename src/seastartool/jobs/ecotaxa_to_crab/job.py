@@ -94,7 +94,7 @@ class MainJob:
         tsv_files_list = list(tsv_files_list)
         other_files_list = list(other_files_list)
         if len(tsv_files_list) == 0:
-            raise RuntimeException("No TSV files supplied!")
+            raise RuntimeError("No TSV files supplied!")
 
         self.eco_taxa_dump_obj = EcoTaxaDump(tsv_files_list, other_files_list)
 

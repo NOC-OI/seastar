@@ -345,7 +345,7 @@ def base_cli():
                     curr_datetime = datetime.datetime.now(datetime.timezone.utc)
                     logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + txt + "\n")
 
-            def error_function(txt, err_level):
+            def error_function(txt, err_level = None):
                 if last_line_terminated:
                     print("[ERR] " + txt)
                 else:

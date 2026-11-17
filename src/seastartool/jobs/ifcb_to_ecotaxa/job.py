@@ -139,7 +139,6 @@ class IFCBEntryProvider:
         if "bind_column" in self.options.keys():
             for bindcol_strdef in self.options["bind_column"]:
                 bindcol_def = bindcol_strdef.split(":")
-                print(self.options["bind_column"])
                 if len(bindcol_def) != 3:
                     raise RuntimeError("Could not parse bind column definition: \"" + bindcol_strdef+ "\". Make sure bind column definitions are in the format <input_column>:<f|t>:<output_column> (e.g. --bindcol \"Salinity PSU:f:sample_salinity_psu\").")
                 self.key_translations[bindcol_def[0]] = ("[" + bindcol_def[1] + "]", bindcol_def[2])
@@ -392,7 +391,7 @@ class IFCBEntryProvider:
                             for row in column_source["dict"]:
                                 if row[column_source["bin_key_column"]] == ifcb_bin:
                                     value = row[self.match_data_keys[ecotaxa_column]]
-                if value is "":
+                if value == "":
                     value = None # Treat empty data cells as null
                 if value is None:
                     self.job_object.error_function("Missing data for ROI " + observation_id + " for column \"" + ecotaxa_column + "\"")
@@ -430,7 +429,7 @@ class MainJob:
         remaining_time = time_per_roi * remaining_rois
         self.report_progress(proportion, remaining_time)
 
-    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s"), log_function = lambda txt : print("[LOG] " + txt), error_function = lambda txt, err_level : print("[ERR] " + txt)):
+    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s"), log_function = lambda txt : print("[LOG] " + txt), error_function = lambda txt, err_level = None : print("[ERR] " + txt)):
 
         self.options = options
         self.report_progress = progress_reporting_function
@@ -468,7 +467,7 @@ class MainJob:
             ifcb_files.append(file_name)
 
         if len(ifcb_bins) == 0:
-            raise RuntimeException("No IFCB bins supplied!")
+            raise RuntimeError("No IFCB bins supplied!")
 
         self.log_function("Creating ROIReaders")
 
