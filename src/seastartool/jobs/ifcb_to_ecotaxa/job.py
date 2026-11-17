@@ -294,7 +294,7 @@ class IFCBEntryProvider:
                         matched_ecotaxa_columns.append(self.key_translations[candidate_key][1])
 
                 # Per-ROI tables are feature files: every other column is a feature, bound as object_<name>
-                is_feature_table = ("roi_key_column" in metadata_dict_info) and not self.options.get("whitelist_features", False)
+                is_feature_table = "roi_key_column" in metadata_dict_info
                 for candidate_key in dict_keys:
                     if candidate_key not in bound_keys:
                         if is_feature_table and candidate_key == "roi_id":
