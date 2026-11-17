@@ -120,13 +120,18 @@ def feature_file(features_dir, bin_name):
     return os.path.join(features_dir, "features", bin_name[:9], bin_name + "_features_v4.csv")
 
 
+def complete_bins(root):
+    """Bins with all three files (hdr, adc, roi), sorted."""
+    return sorted(b for b, exts in raw_bins(root).items() if len(exts) == 3)
+
+
 def bins_without_features(root):
     """Complete bins (hdr+adc+roi) that have no feature file yet, sorted.
     One listing of the features folder: a file check per bin took minutes on a network drive."""
     suffix = "_features_v4.csv"
     done = {os.path.basename(f)[:-len(suffix)] for f in _files(os.path.join(root, FEATURES_DIR, "features"))
             if f.endswith(suffix)}
-    return sorted(b for b, exts in raw_bins(root).items() if len(exts) == 3 and b not in done)
+    return [b for b in complete_bins(root) if b not in done]
 
 
 def scan_project(root):

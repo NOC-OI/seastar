@@ -67,7 +67,7 @@ ifcb_sn<serial>_<cruise ID>_<name>/          e.g. ifcb_sn225_ce26008_ar7e
 |---|---|---|
 | 1 · Choose the IFCB project | Opens a project with **Browse…** or creates one with the right folder names. Shows, per day, the number of bins, complete bins (hdr + adc + roi), feature files and EcoTaxa zips, and highlights the days where they differ. | Done |
 | 2 · Extract the features | [WHOI ifcb-features](https://github.com/WHOIGit/ifcb-features) v1.3.1 (August 2026): the 30 features of the WHOI MATLAB code and the blob masks. Runs in the background on several cores, skips the bins already done, shows the progress and the time left. The WHOI version (tag and commit) is recorded for each bin and goes to EcoTaxa as `process_feature_extractor` and `process_feature_extractor_release`. | Done |
-| 3 · Metadata | Suggests the values instead of typing them: date, time and serial number from the bin name; volume analysed from the `.hdr`; position from the ship navigation; constant fields from the previous day. Then checks them. | Planned |
+| 3 · Sample metadata | Reads the spreadsheet of the samples (CSV or Excel) chosen with **Browse…**. For each EcoTaxa column of a shared list (latitude, longitude, depth, Niskin date and time, salinity, temperature, chlorophyll a, Niskin and CTD numbers, comment), you choose the spreadsheet column it comes from, or a value used when the spreadsheet has none (depth 5 m). Columns missing from the list can be added, and they stay available for the next projects, so every cruise gets the same column names. Depth goes to `sample_depth_*` and `object_depth_*`; dates and times are always text. Writes `metadata/metadata_ecotaxa.csv`, one row per bin, and lists the bins missing from the spreadsheet and the values that are not numbers. | Done |
 | 4 · EcoTaxa tables | `seastar ifcb_to_ecotaxa`, with the features, the metadata and the extractor version. | Planned |
 | 5 · Quality check | Compares the column names (row 1) and types `[f]`/`[t]` (row 2) of every EcoTaxa table of a project before the upload. | Planned |
 
@@ -78,7 +78,7 @@ On Windows:
 1. Double-click `ifcb_app/create_shortcut.bat` once: it puts an **IFCB pipeline** shortcut on the desktop.
 2. Start the app from that shortcut. Keep the black window open while you use the app, and close it to stop the app.
 
-The launcher (`start_ifcb_app.bat`) uses the conda environment `ifcb_app` when there is one, otherwise the Python of the computer. On the first start, it installs the requirements (Streamlit, pandas, Pillow and WHOI ifcb-features). Installing WHOI ifcb-features needs [git](https://git-scm.com).
+The launcher (`start_ifcb_app.bat`) uses the conda environment `ifcb_app` when there is one, otherwise the Python of the computer. On the first start, it installs the requirements (Streamlit, pandas, Pillow, openpyxl and WHOI ifcb-features). Installing WHOI ifcb-features needs [git](https://git-scm.com).
 
 On any system:
 
@@ -96,7 +96,9 @@ A feature extraction runs as its own process. It goes on if the browser tab is c
 |---|---|
 | `app.py` | The page |
 | `project.py` | Naming, creating and scanning a project folder (no interface code) |
+| `metadata.py` | Builds `metadata_ecotaxa.csv` from the spreadsheet and the chosen columns (no interface code) |
+| `metadata_columns.csv` | The shared list of metadata fields: EcoTaxa column(s), type `f`/`t`, unit, value if empty. Columns added from the page are written here |
 | `extract_features.py` | The feature extraction started by the page; it can also be run alone: `python extract_features.py <project folder> --workers 8` |
 | `whoi/extract_slim_features.py` | Copied unchanged from WHOI ifcb-features v1.3.1 (MIT licence, `whoi/LICENSE`): this script is not part of the pip package |
-| `test_project.py` | Test of `project.py`: `python test_project.py` |
+| `test_project.py`, `test_metadata.py` | Tests of `project.py` and `metadata.py`: `python test_project.py`, `python test_metadata.py` |
 | `make_icon.py` | Draws `ifcb_app.ico` and `docs/ifcb_app_icon.png` |

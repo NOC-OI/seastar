@@ -1,5 +1,6 @@
 """IFCB -> EcoTaxa pipeline in the browser.
 Section 1: create a new IFCB project or open an existing one. Section 2: extract the features (WHOI v1.3.1).
+Section 3: the sample metadata, with the EcoTaxa column names of metadata_columns.csv.
 
 Start it with start_ifcb_app.bat (Windows) or:  python -m streamlit run app.py
 Everything runs on this computer; no data leaves it.
@@ -15,6 +16,7 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
+import metadata
 import project
 
 REPO = Path(__file__).resolve().parent
@@ -87,11 +89,13 @@ def create_missing():
 scan_project = st.cache_data(ttl=600, show_spinner="Reading the project folder…")(project.scan_project)
 bins_without_features = st.cache_data(ttl=600, show_spinner="Looking for the bins without features…")(
     project.bins_without_features)
+complete_bins = st.cache_data(ttl=600, show_spinner="Listing the bins…")(project.complete_bins)
 
 
 def rescan():
     scan_project.clear()
     bins_without_features.clear()
+    complete_bins.clear()
 
 
 # ---------------------------------------------------------------- page
@@ -218,11 +222,11 @@ WHOI_VERSION = project.whoi_version()
 if not WHOI_VERSION:
     st.error("WHOI ifcb-features is not installed. Close the app, then start it again with start_ifcb_app.bat: "
              "it installs it (git is needed).")
-    st.stop()
-st.markdown(f"Feature extractor: **WHOI ifcb-features {WHOI_VERSION}** "
-            "([github.com/WHOIGit/ifcb-features](https://github.com/WHOIGit/ifcb-features))")
+else:
+    st.markdown(f"Feature extractor: **WHOI ifcb-features {WHOI_VERSION}** "
+                "([github.com/WHOIGit/ifcb-features](https://github.com/WHOIGit/ifcb-features))")
 latest = st.cache_data(ttl=24 * 3600, show_spinner=False)(project.latest_whoi_release)()  # GitHub asked once a day
-if latest and WHOI_VERSION.split(" ")[0] != latest[0]:
+if WHOI_VERSION and latest and WHOI_VERSION.split(" ")[0] != latest[0]:
     st.info(f"WHOI published ifcb-features **{latest[0]}** on {latest[1]} "
             f"([what changed](https://github.com/WHOIGit/ifcb-features/releases/tag/{latest[0]})); this app uses "
             f"{WHOI_VERSION}. To use it, change the tag in `requirements.txt` and copy the new "
@@ -281,4 +285,135 @@ def features_panel():
     st.button("Run the feature extraction", type="primary", on_click=start_extraction, args=(folder, workers))
 
 
-features_panel()
+if WHOI_VERSION:
+    features_panel()
+
+
+# ---------------------------------------------------------------- 3 · metadata
+def browse_file(key):
+    """File dialog for the spreadsheet of the sample metadata."""
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk()
+    root.withdraw()
+    root.wm_attributes("-topmost", 1)
+    start = st.session_state.get(key) or str(folder / "metadata")
+    path = filedialog.askopenfilename(initialdir=str(Path(start).parent) if Path(start).is_file() else start,
+                                      parent=root, title="Choose the spreadsheet of the sample metadata",
+                                      filetypes=[("Spreadsheets", "*.csv *.xlsx *.xlsm"), ("All files", "*.*")])
+    root.destroy()
+    if path:
+        st.session_state[key] = str(Path(path))
+
+
+@st.cache_data(show_spinner="Reading the spreadsheet…")
+def read_sheet(path, sheet, mtime):  # mtime: read again when the file changes
+    if path.lower().endswith(".csv"):
+        df = pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig", sep=None, engine="python")
+    else:
+        df = pd.read_excel(path, sheet_name=sheet, dtype=object)
+    df.columns = [str(c).strip() for c in df.columns]
+    return df.to_dict("records"), list(df.columns)
+
+
+@st.cache_data
+def sheet_names(path, mtime):
+    return pd.ExcelFile(path).sheet_names
+
+
+def add_new_field():
+    s = st.session_state
+    try:
+        metadata.add_field(s["nf_field"], s["nf_column"], "f" if s["nf_type"].startswith("Number") else "t",
+                           s["nf_unit"], s["nf_default"], s["nf_description"])
+    except ValueError as e:
+        s["nf_message"] = ("error", str(e))
+        return
+    s["nf_message"] = ("success", f"Added {s['nf_column']}: it is now in the list of every project.")
+    for k in ("nf_field", "nf_column", "nf_unit", "nf_default", "nf_description"):
+        s[k] = ""
+
+
+st.header("3 · Sample metadata")
+st.caption("Choose the spreadsheet of the samples (CSV or Excel), then which of its columns fills each EcoTaxa column. "
+           "The EcoTaxa names come from one list shared by all the projects, so every cruise gets the same columns. "
+           "A value in **If empty** is used when the spreadsheet has no value for a bin (e.g. depth 5 m). "
+           "`sample_date` / `sample_time` (and `object_date` / `object_time`, written by SeaSTAR) are the time "
+           "the IFCB analysed the sample, from the bin name.")
+
+meta_dir = folder / "metadata"
+saved = metadata.read_choices(meta_dir)
+if st.session_state.get("meta_project") != str(folder):  # another project: show its own spreadsheet
+    st.session_state["meta_project"] = str(folder)
+    st.session_state["meta_file"] = saved.get("source_file", "")
+sheet_path = Path(st.session_state["meta_file"]) if st.session_state["meta_file"] else None
+c1, c2 = st.columns([5, 1], vertical_alignment="bottom")
+ok = bool(sheet_path and sheet_path.is_file())
+c1.text_input(f":green[✅ **Metadata spreadsheet** · found]" if ok else ":red[⚠️ **Metadata spreadsheet** · "
+              + ("file not found]" if sheet_path else "not chosen yet]"), key="meta_file",
+              help="One row per bin, with a column holding the bin name (e.g. D20250810T164958_IFCB225)")
+c2.button("Browse…", key="b_meta_file", on_click=browse_file, args=("meta_file",), width="stretch")
+if saved:
+    st.caption(f"Metadata file last written {saved['written'].replace('T', ' ')}: "
+               f"`metadata/{metadata.OUTPUT_CSV}` ({len(saved['columns'])} columns).")
+
+if ok:
+    mtime = sheet_path.stat().st_mtime
+    sheet = None
+    if sheet_path.suffix.lower() != ".csv":
+        sheet = st.selectbox("Sheet", sheet_names(str(sheet_path), mtime))
+    rows, columns = read_sheet(str(sheet_path), sheet, mtime)
+    with st.expander(f"Spreadsheet: {len(rows)} rows, {len(columns)} columns"):
+        st.dataframe(pd.DataFrame(rows[:50], columns=columns).astype(str), width="stretch", hide_index=True)
+
+    bin_guess = metadata.guess_bin_column(columns, rows)
+    bin_column = st.selectbox("Column with the bin name", columns,
+                              index=columns.index(saved.get("bin_column", bin_guess)) if saved.get("bin_column", bin_guess) in columns else 0,
+                              help="Links each row to the images of that bin")
+
+    fields = metadata.load_fields()
+    old = saved.get("mapping", {})
+    table = pd.DataFrame([{
+        "Field": f["field"],
+        "EcoTaxa columns": f["ecotaxa_columns"].replace(";", ", "),
+        "Type": "number [f]" if f["type"] == "f" else "text [t]",
+        "Unit": f["unit"],
+        "From spreadsheet column": old.get(f["field"], {}).get("source", metadata.guess_source(f, columns) or "") or "",
+        "If empty": old.get(f["field"], {}).get("default", f["default"]),
+    } for f in fields])
+    edited = st.data_editor(
+        table, hide_index=True, width="stretch", key=f"mapping_{sheet_path}_{sheet}",
+        disabled=["Field", "EcoTaxa columns", "Type", "Unit"],
+        column_config={"From spreadsheet column": st.column_config.SelectboxColumn(options=[""] + columns),
+                       "If empty": st.column_config.TextColumn(help="Constant used when the spreadsheet has no value")})
+    mapping = {r["Field"]: {"source": r["From spreadsheet column"] or "", "default": str(r["If empty"] or "")}
+               for r in edited.to_dict("records")}
+
+    bins = complete_bins(str(folder))
+    out_columns, out, problems = metadata.build(rows, bin_column, mapping, bins)
+    st.markdown(f"**{len(out)} bins** · EcoTaxa columns: " + ", ".join(f"`{c}`" for c in out_columns if c != "bin"))
+    if problems:
+        st.warning(f"{len(problems)} point(s) to check:")
+        st.code("\n".join(problems[:200]), language=None)
+    with st.expander("Preview of the metadata file"):
+        st.dataframe(pd.DataFrame(out[:200]), width="stretch", hide_index=True)
+    if st.button("Write the metadata file", type="primary", disabled=not out):
+        metadata.write(meta_dir, out_columns, out, mapping, str(sheet_path), bin_column)
+        st.success(f"Written: `metadata/{metadata.OUTPUT_CSV}`, {len(out)} bins, {len(out_columns) - 1} columns.")
+
+with st.expander("Add an EcoTaxa column to the list"):
+    st.caption("For a measurement that is not in the list yet. It is added for every future project "
+               f"(file `{Path(metadata.FIELDS_CSV).name}` of the app).")
+    c1, c2, c3 = st.columns(3)
+    c1.text_input("Field name", key="nf_field", placeholder="oxygen")
+    c2.text_input("EcoTaxa column", key="nf_column", placeholder="sample_oxygen_umol_kg",
+                  help="Starts with sample_ (or object_, acq_, process_); lower-case letters, digits and _")
+    c3.radio("Type", ("Number [f]", "Text [t]"), key="nf_type", horizontal=True)
+    c1, c2, c3 = st.columns(3)
+    c1.text_input("Unit", key="nf_unit", placeholder="umol kg-1")
+    c2.text_input("Value if empty (optional)", key="nf_default")
+    c3.text_input("Description", key="nf_description", placeholder="Dissolved oxygen")
+    st.button("Add the column", on_click=add_new_field)
+    if st.session_state.get("nf_message"):
+        kind, text = st.session_state.pop("nf_message")
+        (st.error if kind == "error" else st.success)(text)

@@ -1,4 +1,5 @@
 pandas>=2.0
+openpyxl  # Excel metadata spreadsheets
 pillow  # the app icon
 streamlit>=1.50  # the app (app.py, start_ifcb_app.bat)
 ifcb-features @ git+https://github.com/WHOIGit/ifcb-features.git@v1.3.1  # feature extraction (needs git); keep whoi/extract_slim_features.py at the same version
