@@ -10,6 +10,20 @@ import time
 
 csv.field_size_limit(1024 * 1024 * 1024)
 
+def is_number_column(values):
+    """True when every non-empty value reads as a number that keeps its meaning as a float.
+    Codes with a leading zero (times like 085726, station 007) stay text."""
+    values = [v.strip() for v in values if v is not None and v.strip() != ""]
+    for v in values:
+        try:
+            float(v)
+        except ValueError:
+            return False
+        digits = v.lstrip("+-")
+        if len(digits) > 1 and digits[0] == "0" and digits[1].isdigit():
+            return False
+    return len(values) > 0
+
 class IFCBEntryProvider:
     def __init__(self, roi_readers, ifcb_ids, job_object, with_images = True, options = {}):
         self.roi_readers = roi_readers
@@ -300,7 +314,8 @@ class IFCBEntryProvider:
                 if len(unbound_keys) > 0:
                     built_bindcol = ""
                     for unbound_key in unbound_keys:
-                        built_bindcol += "\"" + unbound_key + ":f:sample_" + unbound_key.lower().replace(" ", "_") + "\" "
+                        column_type = "f" if is_number_column([row[unbound_key] for row in metadata_dict]) else "t"
+                        built_bindcol += "\"" + unbound_key + ":" + column_type + ":sample_" + unbound_key.lower().replace(" ", "_") + "\" "
                     self.job_object.log_function("WARNING: No mapping for keys: " + str(unbound_keys))
                     self.job_object.log_function("These columns will be IGNORED and will not be transferred to EcoTaxa")
                     self.job_object.log_function("If you want these columns bound into the EcoTaxa table, use the --bindcol function, e.g.:")
