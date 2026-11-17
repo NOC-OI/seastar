@@ -74,6 +74,8 @@ ifcb_sn<serial>_<cruise ID>_<name>/          e.g. ifcb_sn225_ce26008_ar7e
 
 A second page, **Compare EcoTaxa tables**, compares the tables of several projects (row 1, the column names; row 2, the types `[f]`/`[t]`) and gives the differences as a text report you can download. It reads only the first two rows of each table and is run only when you ask.
 
+The step-by-step protocol, for the app and for the command line, with diagrams of what the pipeline does: [docs/PROTOCOL.md](docs/PROTOCOL.md).
+
 ### Starting the app
 
 On Windows:
