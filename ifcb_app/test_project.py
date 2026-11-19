@@ -20,6 +20,16 @@ def test_create_and_scan():
         os.makedirs(os.path.dirname(feat))
         open(feat, "w").close()
         assert project.bins_without_features(root) == []
+        b = "D20260802T010203_IFCB225"
+        assert project.feature_file_problem(root, b) == "feature file without a roi_number column"  # empty file
+        with open(feat, "w") as f:
+            f.write("roi_number,Area\n")
+        assert project.feature_file_problem(root, b) == "feature file without any row"
+        with open(feat, "w") as f:
+            f.write("roi_number,Area\n1,10\n2,12\n")
+        assert project.feature_file_problem(root, b) is None
+        assert project.feature_file_problem(root, b, {b: {"rois": 3.0}}) == "feature file has 2 rows for 3 images"
+        assert project.feature_file_problem(root, b, {b: {"rois": 2.0}}) is None
         assert project.select_bins(root, ["D20260802T010203_IFCB225"]) == (["D20260802T010203_IFCB225"], [])
         assert project.select_bins(root, ["D20260802"]) == (["D20260802T010203_IFCB225"], [])  # a day: its complete bins
         chosen, unknown = project.select_bins(root, ["D20260802T010204_IFCB225", "D20260802T020000_IFCB225"])

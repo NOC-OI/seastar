@@ -135,6 +135,8 @@ flowchart TD
 
 - The page shows the WHOI version installed (e.g. `v1.3.1 (commit 1d0687e)`) and tells you when WHOI has
   published a newer release. Keep one version for the whole cruise.
+- **Bins**: *The bins without features* (the default), or *Chosen days or bins, done again* to pick days and bins
+  whose features are extracted again (for example a bin that failed).
 - Choose the number of cores (leave one or two free) → **Run the feature extraction**.
 - The extraction runs in its own process: you can close the tab, but the computer must stay on and awake. The
   progress bar and **Stop** come back when you reopen the project. Bins already done are skipped, so a stopped
@@ -185,8 +187,13 @@ Rules applied to every cruise:
 - Type once: **Operator** and **Metadata checked by** (full names, at least 5 characters), **Project**
   (`sample_project`, e.g. `ce26008_AR7E`), **Ship**, **Cruise**. They are remembered for the project.
 - Keep **Add the blob of each image as a second image (img_rank 1)** checked, unless blobs are not wanted.
-- **Make the EcoTaxa tables.** It runs in the background like step 2. Zips already made are skipped: delete a
-  zip to make it again (for example after correcting its metadata).
+- **Bins**: *The bins without a zip* (the default), or *Chosen days or bins, done again*, for example the bins
+  whose row of the spreadsheet was corrected (run step 3 again first). The new zip replaces the old one only once
+  it is complete.
+- **Make the EcoTaxa tables.** It runs in the background like step 2. Zips already made are skipped, unless chosen.
+- Before SeaSTAR, each feature file is checked: a `roi_number` column and one row per image. A bin that fails gets
+  no zip and is listed with the reason: extract its features again. (SeaSTAR itself would make a zip without any
+  feature: [issue #19](https://github.com/NOC-OI/seastar/issues/19).)
 
 ```mermaid
 sequenceDiagram
@@ -324,7 +331,8 @@ python make_ecotaxa.py Y:\ifcb_sn225_jc278_pap2025new ^
 (`^` continues the line in the Windows command prompt; use `\` in bash.)
 
 - Without `--blobs`, the zips have no blobs.
-- Skips the bins that already have their zip; a failed bin leaves no zip.
+- Skips the bins that already have their zip; a failed bin leaves no zip. Each feature file is checked first (a
+  `roi_number` column, one row per image): a bin that fails is listed, with no zip.
 - One bin or one day at a time: `--bins …`, as for the features. The bins are made again even if they have their
   zip; the new zip replaces the old one only once it is complete, so a failure keeps the old zip. For example, after
   correcting one row of the spreadsheet: `make_metadata.py` (all the project, a few seconds), then

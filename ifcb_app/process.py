@@ -171,12 +171,12 @@ def pid_alive(pid):
     return str(pid) in out
 
 
-def start_extraction(root, workers):
+def start_extraction(root, workers, names=None):
     (root / "log").mkdir(exist_ok=True)
     err = open(root / "log" / "features_errors_python.log", "a", encoding="utf-8")
     # Its own process: it goes on if the browser tab is closed (not if this computer sleeps)
-    subprocess.Popen([sys.executable, str(REPO / "extract_features.py"), str(root), "--workers", str(workers)],
-                     cwd=REPO, stdout=subprocess.DEVNULL, stderr=err, creationflags=NO_WINDOW)  # stdout: the log has it
+    subprocess.Popen([sys.executable, str(REPO / "extract_features.py"), str(root), "--workers", str(workers)]
+                     + (["--bins", *names] if names else []), cwd=REPO, stdout=subprocess.DEVNULL, stderr=err, creationflags=NO_WINDOW)  # stdout: the log has it
     st.session_state["extraction_started"] = True
 
 
@@ -191,6 +191,25 @@ def minutes(n_bins, workers):
 
 def duration(minutes):
     return f"{minutes / 60:.1f} h" if minutes >= 90 else f"{max(1, round(minutes))} min"
+
+
+def bin_choice(key, n_new, what):
+    """Which bins to run (sections 2 and 5): (None, n_new) for the bins without <what> yet, or (the days and bins
+    picked, their number of bins) for --bins: those are done again even if already done."""
+    mode = st.radio("Bins", ["new", "chosen"], horizontal=True, key=f"{key}_mode_{folder}",
+                    format_func=lambda m: f"The bins without {what} ({n_new})" if m == "new"
+                    else "Chosen days or bins, done again")
+    if mode == "new":
+        return None, n_new
+    bins = complete_bins(str(folder))
+    per_day = {}
+    for b in bins:
+        per_day[b[:9]] = per_day.get(b[:9], 0) + 1
+    c1, c2 = st.columns(2)
+    days = c1.multiselect("Days", list(per_day), key=f"{key}_days_{folder}",
+                          format_func=lambda d: f"{d} ({per_day[d]} bins)")
+    picked = c2.multiselect("Bins", [b for b in bins if b[:9] not in days], key=f"{key}_bins_{folder}")
+    return days + picked, sum(per_day[d] for d in days) + len(picked)
 
 
 st.header("2 · Extract the features")
@@ -251,14 +270,18 @@ def features_panel():
 
     todo = bins_without_features(str(folder))
     if not todo:
-        st.success("Every complete bin has its feature file.")
+        st.success("Every complete bin has its feature file. To extract some bins again, choose them below.")
+    names, n = bin_choice("feat", len(todo), "features")
+    if not n:
+        if names is not None:
+            st.caption("Choose days or bins: their features are extracted again and replace the old ones.")
         return
     cores = os.cpu_count() or 2
     c1, c2 = st.columns([1, 3], vertical_alignment="bottom")
     workers = c1.number_input("Cores to use", 1, cores, max(1, cores - 2),
                               help=f"This computer has {cores}. Keep one or two free to go on working.")
-    c2.markdown(f"**{len(todo)} bin{'s' if len(todo) > 1 else ''}** to process, about **{duration(minutes(len(todo), workers))}**")
-    st.button("Run the feature extraction", type="primary", on_click=start_extraction, args=(folder, workers))
+    c2.markdown(f"**{n} bin{'s' if n > 1 else ''}** to process, about **{duration(minutes(n, workers))}**")
+    st.button("Run the feature extraction", type="primary", on_click=start_extraction, args=(folder, workers, names))
 
 
 if WHOI_VERSION:
@@ -496,7 +519,7 @@ else:
 
 
 # ---------------------------------------------------------------- 5 · EcoTaxa tables
-def start_ecotaxa(root, settings):
+def start_ecotaxa(root, settings, names=None):
     (root / "log").mkdir(exist_ok=True)
     (root / "log" / "ecotaxa_settings.json").write_text(json.dumps(settings, indent=1), encoding="utf-8")
     cmd = [sys.executable, str(REPO / "make_ecotaxa.py"), str(root), "--operator", settings["operator"],
@@ -506,6 +529,8 @@ def start_ecotaxa(root, settings):
             cmd += [option, settings[key].strip()]
     if settings["blobs"]:
         cmd.append("--blobs")
+    if names:
+        cmd += ["--bins", *names]
     err = open(root / "log" / "ecotaxa_errors_python.log", "a", encoding="utf-8")
     subprocess.Popen(cmd, cwd=REPO, stdout=subprocess.DEVNULL, stderr=err, creationflags=NO_WINDOW)  # stdout: the log has it
     st.session_state["ecotaxa_started"] = True
@@ -561,7 +586,11 @@ def ecotaxa_panel():
     if flagged:
         st.warning(f"{len(flagged)} bin(s) still have a point to check in sections 3 and 4. Correct them first if you can.")
     if not todo:
-        st.success(f"Every bin with features has its EcoTaxa zip ({len(done)}).")
+        st.success(f"Every bin with features has its EcoTaxa zip ({len(done)}). To make some zips again, choose them below.")
+    names, n = bin_choice("eco", len(todo), "a zip")
+    if not n:
+        if names is not None:
+            st.caption("Choose days or bins: their zips are made again and replace the old ones once complete.")
         return
 
     try:
@@ -586,11 +615,12 @@ def ecotaxa_panel():
     ok_name = len(operator.strip()) >= 5 and (not qcdby.strip() or len(qcdby.strip()) >= 5)
     if operator and not ok_name:
         st.caption(":red[SeaSTAR asks for full names, at least 5 characters.]")
-    st.markdown(f"**{len(todo)} bin{'s' if len(todo) > 1 else ''}** to make into EcoTaxa zips"
-                + (f" ({len(done)} already made)" if done else ""))
+    st.markdown(f"**{n} bin{'s' if n > 1 else ''}** to make into EcoTaxa zips"
+                + (f" ({len(done)} already made)" if done and names is None else "")
+                + (" · bins without features are left out" if names is not None and without else ""))
     st.button("Make the EcoTaxa tables", type="primary", disabled=not ok_name, on_click=start_ecotaxa,
               args=(folder, {"operator": operator.strip(), "qcdby": qcdby, "project_name": project_name, "ship": ship,
-                             "cruise": cruise, "workers": int(workers), "blobs": blobs}))
+                             "cruise": cruise, "workers": int(workers), "blobs": blobs}, names))
 
 
 ecotaxa_panel()

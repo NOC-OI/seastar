@@ -64,8 +64,11 @@ def one_row_csv(path, folder, name, bin_name, key="bin"):
     return out
 
 
-def make_one(root, bin_name, raw_path, args, bindcols):
+def make_one(root, bin_name, raw_path, args, bindcols, stats=None):
     features_dir = os.path.join(root, project.FEATURES_DIR)
+    problem = project.feature_file_problem(root, bin_name, stats)
+    if problem:  # SeaSTAR would make a zip without features and no error
+        raise RuntimeError(problem + ": run extract_features.py --bins " + bin_name)
     out = zip_path(root, bin_name)
     with tempfile.TemporaryDirectory() as tmp:
         new = os.path.join(tmp, os.path.basename(out))  # replaces `out` only once complete: a failed redo keeps the old zip
@@ -121,6 +124,7 @@ def main():
         todo, _, _ = plan(root)
     os.makedirs(os.path.join(root, ZIP_DIR), exist_ok=True)
     raw = project.raw_bin_paths(root, todo)
+    stats = project.load_stats(root)  # image counts, to check the feature files
     columns = metadata.read_choices(os.path.join(root, "metadata")).get("columns", {})
     bindcols = metadata.bindcol_args(columns) if os.path.isfile(os.path.join(root, "metadata", metadata.OUTPUT_CSV)) else []
     status = {"pid": os.getpid(), "started": datetime.now().isoformat(timespec="seconds"), "workers": args.workers,
@@ -148,7 +152,7 @@ def main():
               f"metadata columns: {len(bindcols)}\n")
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=args.workers) as pool:  # threads: the work is in the SeaSTAR processes
-        futures = {pool.submit(make_one, root, b, raw[b], args, bindcols): b for b in todo}
+        futures = {pool.submit(make_one, root, b, raw[b], args, bindcols, stats): b for b in todo}
         for fut in as_completed(futures):
             b = futures[fut]
             try:

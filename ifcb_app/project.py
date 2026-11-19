@@ -371,3 +371,25 @@ def select_bins(root, names):
             close = difflib.get_close_matches(n, bins, 3, 0.6)
             unknown.append(f"{n} (closest: {', '.join(close) or 'none'})")
     return sorted(chosen), unknown
+
+
+def feature_file_problem(root, bin_name, stats=None):
+    """Why the feature file of a bin cannot go to EcoTaxa, or None if it looks right: it must have a roi_number
+    column and one row per image (the image count of log/bin_stats.csv, when known). SeaSTAR skips a feature file
+    without rows and makes the zip anyway, with no features at all."""
+    path = feature_file(os.path.join(root, FEATURES_DIR), bin_name)
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = sum(1 for _ in reader)
+            columns = reader.fieldnames or []
+    except (OSError, UnicodeDecodeError, csv.Error) as e:
+        return f"feature file unreadable ({e})"
+    if "roi_number" not in columns:
+        return "feature file without a roi_number column"
+    if not rows:
+        return "feature file without any row"
+    images = (stats or {}).get(bin_name, {}).get("rois")
+    if images and rows != int(images):
+        return f"feature file has {rows} rows for {int(images)} images"
+    return None
