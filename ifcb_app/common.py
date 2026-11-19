@@ -99,12 +99,11 @@ def duration(minutes):
     return f"{minutes / 60:.1f} h" if minutes >= 90 else f"{max(1, round(minutes))} min"
 
 
-def bin_choice(folder, key, n_new, what):
-    """Which bins to run (steps 3 and 5): (None, n_new) for the bins without <what> yet, or (the days and bins
-    picked, their number of bins) for --bins: those are done again even if already done."""
-    mode = st.radio("Bins", ["new", "chosen"], horizontal=True, key=f"{key}_mode_{folder}",
-                    format_func=lambda m: f"The bins without {what} ({n_new})" if m == "new"
-                    else "Chosen days or bins, done again")
+def bin_choice(folder, key, n_new, new_label):
+    """Which bins to run (steps 3 and 5): (None, n_new) for the bins not done yet (`new_label`), or (the days and
+    bins picked, their number of bins) for --bins: those are done again even if already done."""
+    mode = st.radio("Bins", ["new", "chosen"], horizontal=True, key=f"{key}_mode_{folder}", label_visibility="collapsed",
+                    format_func=lambda m: f"{new_label} ({n_new})" if m == "new" else "Chosen days or bins, done again")
     if mode == "new":
         return None, n_new
     bins = complete_bins(str(folder))

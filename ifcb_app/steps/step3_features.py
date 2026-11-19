@@ -81,7 +81,7 @@ def features_panel():
     todo = common.bins_without_features(str(folder))
     if not todo:
         st.success("Every complete bin has its feature file. To extract some bins again, choose them below.")
-    names, n = common.bin_choice(folder, "feat", len(todo), "features")
+    names, n = common.bin_choice(folder, "feat", len(todo), "Bins not extracted yet")
     if not n:
         if names is not None:
             st.caption("Choose days or bins: their features are extracted again and replace the old ones.")

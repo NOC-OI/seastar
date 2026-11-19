@@ -94,7 +94,7 @@ def ecotaxa_panel():
     todo, without, done = make_ecotaxa.plan(str(folder))
     if not todo:
         st.success(f"Every bin with features has its EcoTaxa zip ({len(done)}). To make some zips again, choose them below.")
-    names, n = common.bin_choice(folder, "eco", len(todo), "a zip")
+    names, n = common.bin_choice(folder, "eco", len(todo), "Bins without an EcoTaxa zip yet")
     if not n:
         if names is not None:
             st.caption("Choose days or bins: their zips are made again and replace the old ones once complete.")

@@ -157,7 +157,7 @@ other pages; each page shows it at the top, with a **Rescan** button.
 
 - The page shows the WHOI version installed (e.g. `v1.3.1 (commit 1d0687e)`) and tells you when WHOI has
   published a newer release. Keep one version for the whole cruise.
-- **Bins**: *The bins without features* (the default), or *Chosen days or bins, done again* to pick days and bins
+- **Bins**: *Bins not extracted yet* (the default), or *Chosen days or bins, done again* to pick days and bins
   whose features are extracted again (for example a bin that failed).
 - Choose the number of cores (leave one or two free) → **Run the feature extraction**.
 - The extraction runs in its own process: you can close the tab, but the computer must stay on and awake. The
@@ -209,7 +209,7 @@ The figures of steps 2 and 4 are saved in `figures/` automatically.
 - Type once: **Operator** and **Metadata checked by** (full names, at least 5 characters), **Project**
   (`sample_project`, e.g. `ce26008_AR7E`), **Ship**, **Cruise**. They are remembered for the project.
 - Keep **Add the blob of each image as a second image (img_rank 1)** checked, unless blobs are not wanted.
-- **Bins**: *The bins without a zip* (the default), or *Chosen days or bins, done again*, for example the bins
+- **Bins**: *Bins without an EcoTaxa zip yet* (the default), or *Chosen days or bins, done again*, for example the bins
   whose row of the spreadsheet was corrected (save the metadata of step 4 again first). The new zip replaces the old one only once
   it is complete.
 - **Make the EcoTaxa tables.** It runs in the background like step 3. Zips already made are skipped, unless chosen.
