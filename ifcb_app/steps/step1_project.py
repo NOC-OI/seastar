@@ -87,7 +87,7 @@ else:
     st.caption(":orange[The folder name does not follow ifcb_sn<serial>_<cruise ID>_<name>.]")
 
 st.subheader("Where the project stands")
-steps = common.progress(folder)
+steps = common.states(folder)
 for n, title in common.STEP_TITLES.items():
     if n in steps:
         state, text = steps[n]

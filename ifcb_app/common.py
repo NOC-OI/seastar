@@ -16,7 +16,7 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CR
 STEP_PAGES = {1: "steps/step1_project.py", 2: "steps/step2_raw_check.py", 3: "steps/step3_features.py",
               4: "steps/step4_metadata.py", 5: "steps/step5_ecotaxa.py"}
 STEP_TITLES = {1: "1 · Project", 2: "2 · Raw data check", 3: "3 · Features", 4: "4 · Metadata", 5: "5 · EcoTaxa tables"}
-ICONS = {"done": "✅", "check": "⚠️", "todo": ":material/check_box_outline_blank:", "running": "🔄"}
+ICONS = {"done": "✅", "check": "⚠️", "todo": ":material/check_box_outline_blank:", "running": ":material/hourglass_top:"}
 
 
 def plural_bins(n):
@@ -78,6 +78,17 @@ def extraction_status(root, job="features"):
         return None
     status["running"] = not status["finished"] and pid_alive(status["pid"])
     return status
+
+
+def mark_started(root, job, proc, total, **extra):
+    """Write log/<job>_status.json as soon as the process is started: the script writes its own a few seconds later
+    (after listing the folders, slow on Y:), and until then the page would read the last, finished run."""
+    if proc is None:
+        return
+    from datetime import datetime
+    status = {"pid": proc.pid, "started": datetime.now().isoformat(timespec="seconds"), "total": total, "done": 0,
+              "errors": [], "finished": None, **extra}
+    (Path(root) / "log" / f"{job}_status.json").write_text(json.dumps(status), encoding="utf-8")
 
 
 def pid_alive(pid):
@@ -194,3 +205,20 @@ def _progress(folder):
 
 
 progress = st.cache_data(ttl=20, show_spinner=False)(_progress)
+
+
+def states(folder):
+    """progress(), plus a run started from step 3 or 5 in this session: shown at once (the cached progress can be
+    20 s old), and its end too, even when the page of the step is not open (its progress panel refreshes on its own,
+    not the menu)."""
+    out = dict(progress(folder))
+    for job, step, flag in (("features", 3, "extraction_started"), ("ecotaxa", 5, "ecotaxa_started")):
+        if st.session_state.get(flag):
+            run = extraction_status(folder, job)
+            if run is None or not run.get("finished"):
+                out[step] = ("running", f"running: {run['done']} / {plural_bins(run['total'])}" if run else "starting")
+            else:
+                st.session_state.pop(flag)
+                progress.clear()
+                return states(folder)
+    return out

@@ -108,7 +108,7 @@ Every script has `--help`. The protocol gives examples and what each check means
 
 <img src="docs/ifcb_app_icon.png" alt="IFCB pipeline app icon: the IFCB instrument, an arrow, and a grid of plankton vignettes" width="128" align="right">
 
-The same five steps, one page each, in the menu on the left: group **Process** (steps 1 to 5 and Compare EcoTaxa tables), then **EcoTaxa API** and **BODC** (to come). The icon of each step tells where it stands for the project chosen: ✅ done, ⚠️ something to look at, ☐ to do, 🔄 running. **Browse…** buttons for the folders and the spreadsheet, progress bars, the figures and the images shown on the page.
+The same five steps, one page each, in the menu on the left: group **Process** (steps 1 to 5 and Compare EcoTaxa tables), then **EcoTaxa API** and **BODC** (to come). The icon of each step tells where it stands for the project chosen: ✅ done, ⚠️ something to look at, ☐ to do, ⏳ running. **Browse…** buttons for the folders and the spreadsheet, progress bars, the figures and the images shown on the page.
 
 On Windows:
 

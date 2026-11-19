@@ -15,7 +15,7 @@ st.header("5 · EcoTaxa tables")
 folder = common.current_project()
 
 
-def start_ecotaxa(root, settings, names=None):
+def start_ecotaxa(root, settings, n, names=None):
     (root / "log").mkdir(exist_ok=True)
     (root / "log" / "ecotaxa_settings.json").write_text(json.dumps(settings, indent=1), encoding="utf-8")
     cmd = [sys.executable, str(common.REPO / "make_ecotaxa.py"), str(root), "--operator", settings["operator"],
@@ -28,8 +28,9 @@ def start_ecotaxa(root, settings, names=None):
     if names:
         cmd += ["--bins", *names]
     err = open(root / "log" / "ecotaxa_errors_python.log", "a", encoding="utf-8")
-    subprocess.Popen(cmd, cwd=common.REPO, stdout=subprocess.DEVNULL, stderr=err,
-                     creationflags=common.NO_WINDOW)  # stdout: the log has it
+    proc = subprocess.Popen(cmd, cwd=common.REPO, stdout=subprocess.DEVNULL, stderr=err,
+                            creationflags=common.NO_WINDOW)  # stdout: the log has it
+    common.mark_started(root, "ecotaxa", proc, n, workers=settings["workers"], blobs=settings["blobs"])
     st.session_state["ecotaxa_started"] = True
 
 
@@ -127,7 +128,7 @@ def ecotaxa_panel():
                 + (" · bins without features are left out" if names is not None and without else ""))
     st.button("Make the EcoTaxa tables", type="primary", disabled=not ok_name, on_click=start_ecotaxa,
               args=(folder, {"operator": operator.strip(), "qcdby": qcdby, "project_name": project_name, "ship": ship,
-                             "cruise": cruise, "workers": int(workers), "blobs": blobs}, names))
+                             "cruise": cruise, "workers": int(workers), "blobs": blobs}, n, names))
 
 
 ecotaxa_panel()
