@@ -78,7 +78,12 @@ def test_create_and_scan():
         qc_file = project.write_qc(root, cruise, project.check_bins(cruise, t))
         rows = {r["bin"]: r for r in csv.DictReader(open(qc_file, encoding="utf-8"))}
         assert rows["D20260802T060000_IFCB225"]["sample_qc_flags"] == "Small volume analysed; Short run", rows
-        assert rows["D20260802T060000_IFCB225"]["sample_qc_n_flags"] == "2"
+        r6 = rows["D20260802T060000_IFCB225"]
+        assert r6["sample_qc_run_time_s_flag"] == "4" and r6["sample_qc_ml_analyzed_flag"] == "3", r6
+        assert r6["sample_qc_flag"] == "4" and r6["sample_qc_images_flag"] == "1"
+        assert rows["D20260802T050000_IFCB225"]["sample_qc_flag"] == "3"  # many cut images: doubtful
+        assert rows["D20260802T070000_IFCB225"]["sample_qc_flag"] == "1"
+        assert 20 <= project.count_sample_columns(root) <= project.SAMPLE_COLUMNS_MAX
         assert rows["D20260802T070000_IFCB225"]["sample_qc_flags"] == "ok" and rows["D20260802T070000_IFCB225"]["sample_qc_images"] == "3000"
         binds = project.qc_bindcols(root)
         assert "sample_qc_flags:t:sample_qc_flags" in binds and "sample_qc_cut_images_pct:f:sample_qc_cut_images_pct" in binds

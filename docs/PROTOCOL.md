@@ -152,13 +152,18 @@ other pages; each page shows it at the top, with a **Rescan** button.
 - Look at **Position of the images in the camera field** (ROI x against ROI y of one bin; the flagged bins first):
   the images should form one compact band. Spread out or moved, the flow is bad (blocked needle, pump); orange images
   touch the left or right edge and are cut.
-- The result of the checks is saved in `metadata/qc_bins.csv` (one row per bin) and goes into the EcoTaxa
-  tables as sample columns: the values measured (`sample_qc_images`, `sample_qc_ml_analyzed`,
-  `sample_qc_run_time_s`, `sample_qc_images_per_trigger`, `sample_qc_humidity_pct`,
-  `sample_qc_stream_y_median_px`, `sample_qc_stream_y_spread_px`, `sample_qc_cut_images_pct`), the reasons
-  (`sample_qc_flags`, `ok` if none), their number (`sample_qc_n_flags`) and the procedure
-  (`sample_qc_procedure`). Doubtful bins are then known before the classification, and can be filtered in
-  EcoTaxa (e.g. `sample_qc_n_flags` = 0). A later QC procedure can write the same file: step 5 only reads it.
+- The table of step 2 has one row per bin and one column per value measured; orange cells are probably bad
+  (flag 3), red cells bad (flag 4). The flags follow the IODE scale used by BODC: 1 good, 3 probably bad, 4 bad,
+  9 missing. Bad (4): *Few images*, *Short run*; probably bad (3): the other checks (thresholds to agree with the
+  team). *Why each bin is flagged* gives each reason with the values of the cruise.
+- The result is saved in `metadata/qc_bins.csv` and goes into the EcoTaxa tables as sample columns: each value
+  (`sample_qc_images`, `sample_qc_ml_analyzed`, `sample_qc_run_time_s`, `sample_qc_images_per_trigger`,
+  `sample_qc_humidity_pct`, `sample_qc_stream_y_median_px`, `sample_qc_stream_y_spread_px`,
+  `sample_qc_cut_images_pct`) with its flag (`…_flag`), the worst flag of the bin (`sample_qc_flag`), the reasons
+  (`sample_qc_flags`, `ok` if none) and the procedure (`sample_qc_procedure`): 19 columns. Doubtful bins are then
+  known before the classification, and can be filtered in EcoTaxa (e.g. `sample_qc_flag` = 1). A later QC procedure
+  can write the same file: step 5 only reads it. EcoTaxa accepts 60 `sample_` columns: step 5 warns if a project
+  could get more.
 
 ### Step 3 · Features
 

@@ -320,36 +320,76 @@ def check_bins(stats, bin_time):
 # values measured and the reasons, in metadata/, joined to the EcoTaxa tables as sample columns. A later QC procedure
 # (Emilie's) can write the same file: the EcoTaxa step only reads it.
 QC_CSV = "qc_bins.csv"
-QC_COLUMNS = [("rois", "sample_qc_images"), ("ml_analyzed", "sample_qc_ml_analyzed"), ("run_time", "sample_qc_run_time_s"),
-              ("images_per_trigger", "sample_qc_images_per_trigger"), ("humidity", "sample_qc_humidity_pct"),
-              ("stream_y_median", "sample_qc_stream_y_median_px"), ("stream_y_spread", "sample_qc_stream_y_spread_px"),
-              ("cut_percent", "sample_qc_cut_images_pct")]
+# (stat, EcoTaxa column, check that flags it, flag when it does). Flags: IODE scale, as used by BODC:
+# 1 good, 3 probably bad (doubtful), 4 bad (failed), 9 missing value. Thresholds of 3 or 4 to agree with the team.
+QC_COLUMNS = [("rois", "sample_qc_images", "Few images", 4),
+              ("ml_analyzed", "sample_qc_ml_analyzed", "Small volume analysed", 3),
+              ("run_time", "sample_qc_run_time_s", "Short run", 4),
+              ("images_per_trigger", "sample_qc_images_per_trigger", "Few images per trigger", 3),
+              ("humidity", "sample_qc_humidity_pct", "High humidity", 3),
+              ("stream_y_median", "sample_qc_stream_y_median_px", "Stream shifted", 3),
+              ("stream_y_spread", "sample_qc_stream_y_spread_px", "Stream wide", 3),
+              ("cut_percent", "sample_qc_cut_images_pct", "Many cut images", 3)]
+QC_GOOD, QC_MISSING = 1, 9
 QC_PROCEDURE = "IFCB app raw data check (IFCB field guide, WHOI IFCB dashboard, California IFCB network QC)"
+SAMPLE_COLUMNS_MAX = 60  # EcoTaxa accepts at most 60 sample_ columns
 
 
-def write_qc(root, stats, problems):
-    """metadata/qc_bins.csv from the bin stats and the problems of check_bins: the values, the reasons
-    (sample_qc_flags, "ok" if none; a gap before a bin is not a problem of the bin) and their number. Returns its path."""
+def qc_rows(stats, problems):
+    """One dict per bin: each value, its flag (<column>_flag), the worst flag of the bin (sample_qc_flag), the reasons
+    (sample_qc_flags, "ok" if none; a gap before a bin is not a problem of the bin) and the procedure."""
     cut = cut_percent(stats)
     reasons = {}
     for p in problems:
         if p["bin"] and p["check"] != "Gap in the sampling":
             reasons.setdefault(p["bin"], []).append(p["check"])
+    rows = []
+    for b, s in sorted(stats.items()):
+        row, flags = {"bin": b}, []
+        for key, column, check, bad in QC_COLUMNS:
+            v = cut.get(b) if key == "cut_percent" else s.get(key)
+            missing = v is None or v != v  # None or NaN
+            row[column] = "" if missing else int(v) if float(v).is_integer() else v  # 847, not 847.0
+            row[column + "_flag"] = QC_MISSING if missing else bad if check in reasons.get(b, []) else QC_GOOD
+            flags.append(row[column + "_flag"])
+        known = [f for f in flags if f != QC_MISSING]
+        row["sample_qc_flag"] = max(known) if known else QC_MISSING
+        row["sample_qc_flags"] = "; ".join(reasons.get(b, [])) or "ok"
+        row["sample_qc_procedure"] = QC_PROCEDURE
+        rows.append(row)
+    return rows
+
+
+def write_qc(root, stats, problems):
+    """metadata/qc_bins.csv (qc_rows of every bin): put in the EcoTaxa tables as sample columns. Returns its path."""
+    rows = qc_rows(stats, problems)
     path = os.path.join(root, "metadata", QC_CSV)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["bin"] + [c for _, c in QC_COLUMNS] + ["sample_qc_flags", "sample_qc_n_flags", "sample_qc_procedure"])
-        for b, s in sorted(stats.items()):
-            values = [cut.get(b, "") if k == "cut_percent" else s.get(k, "") for k, _ in QC_COLUMNS]
-            values = [int(v) if isinstance(v, float) and v.is_integer() else v for v in values]  # 847, not 847.0
-            flags = reasons.get(b, [])
-            w.writerow([b] + values + ["; ".join(flags) or "ok", len(flags), QC_PROCEDURE])
+        w = csv.DictWriter(f, list(rows[0]) if rows else ["bin"])
+        w.writeheader()
+        w.writerows(rows)
     return path
 
 
+def count_sample_columns(root):
+    """Most sample_ columns the EcoTaxa tables of the project can get: the metadata, the QC results and the ones
+    SeaSTAR writes from its options (id, operator, checked by, project, ship, cruise)."""
+    names = set()
+    try:
+        with open(os.path.join(root, "metadata", "metadata_ecotaxa.json"), encoding="utf-8") as f:
+            names |= {c for c in json.load(f).get("columns", {}) if c.startswith("sample_")}
+    except (OSError, ValueError):
+        pass
+    path = os.path.join(root, "metadata", QC_CSV)
+    if os.path.isfile(path):
+        with open(path, newline="", encoding="utf-8") as f:
+            names |= {c for c in next(csv.reader(f), []) if c.startswith("sample_")}
+    return len(names | {"sample_id", "sample_operator", "sample_meta_qc_by", "sample_project", "sample_ship", "sample_cruise"})
+
+
 def qc_bindcols(root):
-    """--bindcol options of the columns of metadata/qc_bins.csv (text for the flags and the procedure), or []."""
+    """--bindcol options of the columns of metadata/qc_bins.csv (text for the reasons and the procedure), or []."""
     path = os.path.join(root, "metadata", QC_CSV)
     if not os.path.isfile(path):
         return []
@@ -509,6 +549,10 @@ def warnings(root, step):
         if not os.path.isfile(os.path.join(root, "metadata", QC_CSV)):
             out.append("No result of the raw data check yet (step 2, make_figures.py): the zips would have no "
                        "sample_qc_ columns.")
+        n = count_sample_columns(root)
+        if n > SAMPLE_COLUMNS_MAX:
+            out.append(f"The EcoTaxa tables would have up to {n} sample_ columns, EcoTaxa accepts {SAMPLE_COLUMNS_MAX}: "
+                       "leave some metadata fields out (step 4).")
         for name, script in (("metadata_check", "make_metadata.py"), ("bins_check", "make_figures.py")):
             report = last_report(root, name)
             if report is None:
