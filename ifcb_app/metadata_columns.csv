@@ -1,0 +1,13 @@
+field,ecotaxa_columns,type,unit,default,min,max,description
+lat,object_lat,f,decimal degrees N,,-90,90,Latitude of the sample
+lon,object_lon,f,decimal degrees E,,-180,180,Longitude of the sample
+depth_min,sample_depth_min;object_depth_min,f,m,5,0,6000,Shallowest depth of the sample (5 m for the underway intake)
+depth_max,sample_depth_max;object_depth_max,f,m,5,0,6000,Deepest depth of the sample (5 m for the underway intake)
+niskin_date,sample_niskin_date,t,YYYY-MM-DD,,,,Date the Niskin bottle was closed
+niskin_time,sample_niskin_time,t,HH:MM:SS UTC,,,,Time the Niskin bottle was closed
+salinity,sample_salinity_pss,f,PSS-78,,0,42,Salinity
+temperature,sample_temperature_degrees,f,degrees C,,-3,40,Water temperature
+chla,sample_chla_mg_m3,f,mg m-3,,0,100,Chlorophyll a
+niskin_id,sample_niskin_id,t,,,,,Niskin bottle number
+ctd_id,sample_ctd_id,t,,,,,CTD cast identifier
+comment,sample_comment,t,,,,,Free comment on the sample

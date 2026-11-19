@@ -1,0 +1,7 @@
+pandas>=2.0
+openpyxl  # Excel metadata spreadsheets
+pillow  # the app icon
+streamlit>=1.50  # the app (app.py, start_ifcb_app.bat)
+vl-convert-python  # QC figures saved as PNG in figures/
+ifcb-features @ git+https://github.com/WHOIGit/ifcb-features.git@v1.3.1  # feature extraction (needs git); keep whoi/extract_slim_features.py at the same version
+seastartool @ git+https://github.com/amandaelineau-stack/seastar.git@all-fixes  # EcoTaxa tables: Amanda's fork with the fixes of PRs #11-#16 (back to PyPI once merged)
