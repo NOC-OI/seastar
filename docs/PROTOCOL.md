@@ -139,14 +139,16 @@ other pages; each page shows it at the top, with a **Rescan** button.
 ### Step 2 · Raw data check
 
 - Click **Read the raw data** if the page asks: it reads the `.adc` and `.hdr` of the bins not read yet (about 25 s
-  per bin on the network drive; the feature extraction also reads them).
+  per bin on the network drive; the feature extraction also reads them). A bar shows the bins read and the time
+  left. It is saved every 20 bins: if the page is left, the next run goes on from there.
 - Read the list of the bins to look at (the checks are in section 6 below; *What each check means* on the page).
   **Move the failed acquisitions out of `raw/`** (e.g. to `Failed_acquisitions_rawdata/`) and click **Rescan**, so
   that step 3 does not spend time on them.
 - Look at the figures against time: concentration in images mL⁻¹, images per trigger, position and width of the
   stream of particles, images cut at the edge of the camera field, humidity. **In each figure, only the bins flagged
-  for a reason that figure shows are coloured, and the legend names the reason.** Hover a point: *to check* lists
-  every reason of the bin.
+  for a reason that figure shows are coloured, and the legend names the reason** (a bin with several reasons takes
+  the colour of the main one). Hover a point: *to check* lists every reason of the bin. Drag to pan, Shift + mouse
+  wheel to zoom, double-click to go back.
 - Look at **Position of the images in the camera field** (ROI x against ROI y of one bin; the flagged bins first):
   the images should form one compact band. Spread out or moved, the flow is bad (blocked needle, pump); orange images
   touch the left or right edge and are cut.

@@ -142,17 +142,47 @@ STATS_FIELDS = ["rois", "ml_analyzed", "rois_per_ml", "triggers", "images_per_tr
                 "humidity_alarm", "stream_y_median", "stream_y_spread", "cut_left", "right_edge", "cut_right"]
 
 
-def bin_stats(root, bins):
+def bin_stats(root, bins, progress=None):
     """{bin: STATS_FIELDS values} from the .adc and .hdr files. Kept in log/bin_stats.csv: each bin is read once
-    (again only if it was counted before a field was added), the raw files of a bin do not change."""
+    (again only if it was counted before a field was added), the raw files of a bin do not change.
+    progress(done, total) is called after each bin read; saved every 20 bins, so a stopped run loses little."""
     stats = load_stats(root)
     new = [b for b in bins if not stats_complete(stats.get(b))]
     raw = raw_bin_paths(root, new)
-    for b in new:
+    for i, b in enumerate(new, 1):
         stats[b] = read_bin_stats(raw[b], b)
+        if i % 20 == 0:
+            save_stats(root, stats)
+        if progress:
+            progress(i, len(new))
     if new:
         save_stats(root, stats)
     return {b: stats[b] for b in bins}
+
+
+def printer(label):
+    """A progress(done, total) for the command line: a line every 10 bins, with the time left."""
+    import time
+    t0 = time.time()
+
+    def show(done, total):
+        if done % 10 == 0 or done == total:
+            print(f"{label}: {done} / {total} bins, {time_left(done, total, time.time() - t0)}", flush=True)
+    return show
+
+
+def time_left(done, total, elapsed):
+    """'about 12 min left', from the time the first `done` items took."""
+    if not done:
+        return "estimating the time left…"
+    if done >= total:
+        return f"done in {elapsed / 60:.0f} min" if elapsed >= 60 else f"done in {round(elapsed)} s"
+    s = elapsed / done * (total - done)
+    if s < 10:
+        return "a few seconds left"
+    if s >= 5400:
+        return f"about {s / 3600:.1f} h left"
+    return f"about {max(1, round(s / 60))} min left" if s >= 60 else f"about {round(s)} s left"
 
 
 def stats_complete(s):

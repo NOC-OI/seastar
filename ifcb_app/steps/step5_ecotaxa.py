@@ -66,8 +66,11 @@ def ecotaxa_panel():
     if status and status["running"]:
         st.session_state["ecotaxa_started"] = True
         done, total = status["done"], status["total"]
+        from datetime import datetime
+        elapsed = (datetime.now() - datetime.fromisoformat(status["started"])).total_seconds()
+        left = project.time_left(done, total, elapsed)
         st.progress(done / total if total else 1.0,
-                    text=f"Making the EcoTaxa zips: {done} / {total} bins · {status['workers']} at a time · "
+                    text=f"Making the EcoTaxa zips: {done} / {total} bins · {left} · {status['workers']} at a time · "
                          f"blobs: {'yes' if status['blobs'] else 'no'} · started {status['started'].replace('T', ' ')}")
         if status["errors"]:
             st.warning(f"{len(status['errors'])} bin(s) failed so far, see the list when it ends.")

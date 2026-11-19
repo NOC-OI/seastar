@@ -29,10 +29,20 @@ if todo and not st.session_state.get(f"count_{folder}"):
         st.session_state[f"count_{folder}"] = True
         st.rerun()
     st.stop()
-with st.spinner(f"Reading the raw data of {len(todo)} bin(s)…" if todo else "Reading the image counts…"):
-    stats = project.bin_stats(str(folder), bins)
 if todo:
+    import time
+    bar, t0 = st.progress(0.0, text=f"Reading the raw data of {len(todo)} bin(s)…"), time.time()
+
+    def show(done, total):
+        elapsed = time.time() - t0
+        bar.progress(done / total, text=f"Reading the raw data: {done} / {total} bins · "
+                                        f"{elapsed / 60:.0f} min so far · {project.time_left(done, total, elapsed)}. "
+                                        "Saved every 20 bins: if you leave the page, it goes on from there next time.")
+    stats = project.bin_stats(str(folder), bins, progress=show)
+    bar.empty()
     common.progress.clear()
+else:
+    stats = project.bin_stats(str(folder), bins)
 
 bin_problems = project.check_bins(stats, metadata.bin_time)
 if bin_problems:
@@ -61,7 +71,7 @@ df, variables, _ = qc.frame(stats, None, bin_problems)
 figures = qc.charts(df, variables, None)
 st.subheader("Against time")
 st.caption("In each figure, only the bins flagged for a reason that figure shows are coloured, and the legend names "
-           "the reason. Hover a point: *to check* lists every reason of the bin. Drag to pan, scroll to zoom.")
+           "the reason. Hover a point: *to check* lists every reason of the bin. Drag to pan, Shift + mouse wheel to zoom, double-click to reset.")
 names = [c for c, _, _ in variables]
 for i in range(0, len(names), 2):
     for col, c in zip(st.columns(2), names[i:i + 2]):
@@ -81,7 +91,7 @@ frame_right = max(s.get("right_edge", 0) for s in stats.values())
 with st.spinner("Reading the .adc file…"):
     rois = project.roi_positions(str(folder), roi_bin)
 if rois:
-    st.altair_chart(qc.roi_chart(rois, frame_right).interactive(), width="stretch")
+    st.altair_chart(qc.zoomable(qc.roi_chart(rois, frame_right)), width="stretch")
     s = stats[roi_bin]
     st.caption(f"{len(rois)} images · stream centred at y = {s.get('stream_y_median', float('nan')):.0f} px, "
                f"{s.get('stream_y_spread', float('nan')):.0f} px wide (10 to 90 %) · "

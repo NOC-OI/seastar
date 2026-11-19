@@ -33,7 +33,7 @@ def main():
     missing = sum(1 for b in bins if not project.stats_complete(known.get(b)))
     if missing:
         print(f"Counting the images of {missing} bin(s)…", flush=True)
-    stats = project.bin_stats(root, bins)
+    stats = project.bin_stats(root, bins, progress=project.printer("Reading the raw data"))
 
     meta_csv = os.path.join(root, "metadata", metadata.OUTPUT_CSV)
     meta_rows = None
@@ -41,7 +41,7 @@ def main():
         with open(meta_csv, newline="", encoding="utf-8") as f:
             meta_rows = list(csv.DictReader(f))
     else:
-        print("No metadata file (step 3): only the particle concentration is plotted.")
+        print("No metadata file yet (step 4): only the concentration and the instrument values are plotted.")
 
     problems = project.check_bins(stats, metadata.bin_time)
     last_metadata = project.last_report(root, "metadata_check")  # its points are coloured in the figures too

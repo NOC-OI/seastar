@@ -78,22 +78,34 @@ def frame(stats, meta_rows, problems):
     return df, variables, depth
 
 
+# When a bin has several reasons in one figure, its colour is the first of this list (the tooltip gives them all):
+# one colour per reason keeps the legend short, combinations made it too long to read.
+PRIORITY = ["Few images", "Short run", "Small volume analysed", "Few images per trigger", "High humidity",
+            "Many cut images", "Stream shifted", "Stream wide", "Out of range", "Not a number", "Position jump",
+            "Gap in the sampling"]
+
+
 def why(df, *keys):
-    """The reasons of each bin for the figures `keys` (e.g. the variable and the depth), "ok" when none."""
+    """The main reason of each bin for the figures `keys` (e.g. the variable and the depth), "ok" when none."""
     cols = [f"why {k}" for k in keys if k and f"why {k}" in df.columns]
     if not cols:
         return pd.Series("ok", index=df.index)
-    joined = df[cols].apply(lambda r: "; ".join(dict.fromkeys(x for v in r for x in v.split("; ") if x)), axis=1)
-    return joined.replace("", "ok")
+    rank = {c: i for i, c in enumerate(PRIORITY)}
+
+    def main(row):
+        reasons = [x for v in row for x in v.split("; ") if x]
+        return min(reasons, key=lambda r: rank.get(r, len(rank))) if reasons else "ok"
+    return df[cols].apply(main, axis=1)
 
 
 def colour(values):
-    """Altair colour: blue for ok, one colour per reason, legend titled "To check"."""
+    """Altair colour: blue for ok, one colour per reason, legend titled "To check" on several lines if needed."""
     import altair as alt
-    reasons = sorted(set(values) - {"ok"})
+    reasons = sorted(set(values) - {"ok"}, key=lambda r: PRIORITY.index(r) if r in PRIORITY else len(PRIORITY))
     rng = [SERIES] + [REASON_COLOURS[i % len(REASON_COLOURS)] for i in range(len(reasons))]
     return alt.Color("why:N", scale=alt.Scale(domain=["ok"] + reasons, range=rng),
-                     legend=alt.Legend(title="To check", orient="top", labelLimit=400) if reasons else None)
+                     legend=alt.Legend(title="To check", orient="top", columns=3, labelLimit=180,
+                                       symbolSize=60) if reasons else None)
 
 
 def charts(df, variables, depth):
@@ -102,32 +114,43 @@ def charts(df, variables, depth):
     tooltip = ["bin", alt.Tooltip("time:T", format="%Y-%m-%d %H:%M"), alt.Tooltip("rois_per_ml:Q", format=".0f"),
                "rois", alt.Tooltip("ml_analyzed:Q", format=".2f"), "to check"]
 
-    def data(*keys):
+    base = ["bin", "time", "rois_per_ml", "rois", "ml_analyzed", "to check"]
+
+    def data(keys, columns):
+        """Only the columns the chart uses: with every column, 1400 bins made 0.8 MB per chart in the page."""
         w = why(df, *keys)
-        return df.assign(why=w, flagged=(w != "ok").astype(int))  # flagged points drawn on top
+        cols = list(dict.fromkeys(base + [c for c in columns if c in df.columns]))
+        return df[cols].assign(why=w, flagged=(w != "ok").astype(int))  # flagged points drawn on top
 
     def scatter(d, x, y, x_title, y_title, reverse_y=False):
         x_axis = (alt.X(x, title=x_title, axis=alt.Axis(format="%d %b %H:%M", labelAngle=-30), scale=alt.Scale(padding=12))
                   if x.endswith(":T") else alt.X(x, title=x_title, scale=alt.Scale(zero=False, padding=12)))
         extra = [c for c in (y.split(":")[0], x.split(":")[0]) if c not in ("time", "rois_per_ml")]
-        return (alt.Chart(d).mark_circle(size=60, opacity=0.8).encode(
+        return zoomable(alt.Chart(d).mark_circle(size=60, opacity=0.8).encode(
             x=x_axis, y=alt.Y(y, title=y_title, scale=alt.Scale(reverse=reverse_y, zero=False, padding=12)),
-            color=colour(d["why"]), order=alt.Order("flagged:Q"), tooltip=tooltip + extra)
-            .properties(height=260).interactive())
+            color=colour(d["why"]), order=alt.Order("flagged:Q"), tooltip=tooltip + extra).properties(height=260))
 
     figures = {}
     if {"object_lat", "object_lon"} <= set(df.columns) and df["object_lat"].notna().any():
-        pos = data(MAP).dropna(subset=["object_lat", "object_lon"])
+        pos = data([MAP], ["object_lat", "object_lon"]).dropna(subset=["object_lat", "object_lon"])
         figures["qc_map.png"] = ("Sample positions (longitude, latitude)", alt.Chart(pos).mark_circle(size=60, opacity=0.8).encode(
             x=alt.X("object_lon:Q", title="Longitude (degrees E)", scale=alt.Scale(zero=False, padding=12)),
             y=alt.Y("object_lat:Q", title="Latitude (degrees N)", scale=alt.Scale(zero=False, padding=12)),
             color=colour(pos["why"]), order=alt.Order("flagged:Q"), tooltip=tooltip).properties(height=450))
     for c, title, by_depth in variables:
-        figures[f"qc_{c}_time.png"] = (f"{title} against time", scatter(data(c), "time:T", f"{c}:Q", "Time (UTC)", title))
+        figures[f"qc_{c}_time.png"] = (f"{title} against time",
+                                       scatter(data([c], [c]), "time:T", f"{c}:Q", "Time (UTC)", title))
         if depth and by_depth:
             figures[f"qc_{c}_depth.png"] = (f"{title} against depth", scatter(
-                data(c, depth), f"{c}:Q", f"{depth}:Q", title, "Depth (m)", reverse_y=True))
+                data([c, depth], [c, depth]), f"{c}:Q", f"{depth}:Q", title, "Depth (m)", reverse_y=True))
     return figures
+
+
+def zoomable(chart):
+    """Pan by dragging, zoom with Shift + mouse wheel, double-click to reset. A plain mouse wheel scrolls the page:
+    with .interactive() it zoomed the chart under the mouse, which then looked empty."""
+    import altair as alt
+    return chart.add_params(alt.selection_interval(bind="scales", zoom="wheel![event.shiftKey]"))
 
 
 def roi_chart(rois, frame_right):

@@ -29,7 +29,7 @@ def main():
     bins = project.complete_bins(root)
     if not bins:
         sys.exit(f"No complete bin in {os.path.join(root, 'raw')}")
-    stats = project.bin_stats(root, bins)  # reads the .adc of the bins not counted yet
+    stats = project.bin_stats(root, bins, progress=project.printer("Reading the raw data"))  # reads the .adc of the bins not counted yet
     reasons = {}
     for p in project.check_bins(stats, metadata.bin_time):
         if p["check"] in FLOW_CHECKS:
