@@ -52,7 +52,7 @@ On the command line nobody looks at the column choices of step 4 before they are
 read them, and read the checks it prints before step 5.
 
 In the app, the menu on the left has three groups: **Process** (steps 1 to 5 and Compare), **EcoTaxa API** and
-**BODC** (to come). The icon of each step tells where it stands: ✅ done, ⚠️ something to look at, ⬜ to do, 🔄 running.
+**BODC** (to come). The icon of each step tells where it stands: ✅ done, ⚠️ something to look at, ☐ to do, 🔄 running.
 
 ---
 

@@ -19,7 +19,7 @@ for key in ("project", "parent", "mode", "serial", "cruise_id", "cruise_name", "
     if key in st.session_state:
         st.session_state[key] = st.session_state[key]
 
-# The icon of each step tells where it stands for the project chosen (✅ done, ⚠️ to look at, ⬜ to do, 🔄 running).
+# The icon of each step tells where it stands for the project chosen (✅ done, ⚠️ to look at, ☐ to do, 🔄 running).
 folder = common.chosen_project()
 states = common.progress(folder) if folder else {}
 steps = [st.Page(REPO / common.STEP_PAGES[n], title=title, default=n == 1,

@@ -16,7 +16,7 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CR
 STEP_PAGES = {1: "steps/step1_project.py", 2: "steps/step2_raw_check.py", 3: "steps/step3_features.py",
               4: "steps/step4_metadata.py", 5: "steps/step5_ecotaxa.py"}
 STEP_TITLES = {1: "1 · Project", 2: "2 · Raw data check", 3: "3 · Features", 4: "4 · Metadata", 5: "5 · EcoTaxa tables"}
-ICONS = {"done": "✅", "check": "⚠️", "todo": "⬜", "running": "🔄"}
+ICONS = {"done": "✅", "check": "⚠️", "todo": ":material/check_box_outline_blank:", "running": "🔄"}
 
 
 def plural_bins(n):
