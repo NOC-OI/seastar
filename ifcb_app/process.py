@@ -400,11 +400,13 @@ if ok:
         st.success("No problem found in the spreadsheet.")
     with st.expander("Preview of the metadata file"):
         st.dataframe(pd.DataFrame(out[:200]), width="stretch", hide_index=True)
-    if st.button("Write the metadata file", type="primary", disabled=not out):
+    if st.button("Save the metadata for the EcoTaxa tables", type="primary", disabled=not out,
+                 help=f"Writes metadata/{metadata.OUTPUT_CSV}, used by section 5. Nothing is saved before this click: "
+                      "click again after correcting the spreadsheet, then make the zips of the corrected bins again."):
         metadata.write(meta_dir, out_columns, out, mapping, str(sheet_path), bin_column)
         report = metadata.write_report(str(folder / "log"), problems, len(out), str(sheet_path))
-        st.success(f"Written: `metadata/{metadata.OUTPUT_CSV}`, {len(out)} bins, {len(out_columns) - 1} columns. "
-                   f"Check report: `log/{Path(report).name}`.")
+        st.success(f"Saved: `metadata/{metadata.OUTPUT_CSV}`, {len(out)} bins, {len(out_columns) - 1} columns, used by "
+                   f"section 5. Check report: `log/{Path(report).name}`.")
     meta_rows, flagged, meta_problems = out, {p["bin"] for p in problems if p["bin"]}, problems
 
 with st.expander("Add an EcoTaxa column to the list"):

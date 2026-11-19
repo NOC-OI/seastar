@@ -110,7 +110,7 @@ flowchart TD
     B --> C{"Every day: bins = complete bins?"}
     C -->|no| C1["Copy the missing .hdr/.adc/.roi,<br/>or move the bin out of raw/"] --> B
     C -->|yes| D["2 · Run the feature extraction<br/>(background, ~2 min per bin per core)"]
-    D --> E["3 · Choose the spreadsheet, map its columns,<br/>Write the metadata file"]
+    D --> E["3 · Choose the spreadsheet, map its columns,<br/>Save the metadata for the EcoTaxa tables"]
     E --> F{"Points to check?"}
     F -->|yes| F1["Correct the spreadsheet<br/>(typos in bin names, values…)"] --> E
     F -->|no| G["4 · Count the images if asked,<br/>look at the map and the figures"]
@@ -161,7 +161,10 @@ flowchart TD
 | Niskin after analysis | The Niskin date or time is wrong |
 | Same bin in several rows | Keep one row |
 
-4. **Write the metadata file.** Correct the spreadsheet and choose it again until the list is empty or explained.
+4. **Save the metadata for the EcoTaxa tables.** Nothing is saved before this click: the page only shows the
+   preview and the checks. It writes `metadata/metadata_ecotaxa.csv`, which section 5 puts in the EcoTaxa tables.
+   Correct the spreadsheet and choose it again until the list is empty or explained, and click again after each
+   correction.
 
 Rules applied to every cruise:
 
