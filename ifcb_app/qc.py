@@ -80,7 +80,7 @@ def frame(stats, meta_rows, problems):
 
 # When a bin has several reasons in one figure, its colour is the first of this list (the tooltip gives them all):
 # one colour per reason keeps the legend short, combinations made it too long to read.
-PRIORITY = ["Few images", "Short run", "Small volume analysed", "Few images per trigger", "High humidity",
+PRIORITY = ["Short run", "Small volume analysed", "Few images per trigger",
             "Many cut images", "Stream shifted", "Stream wide", "Out of range", "Not a number", "Position jump",
             "Gap in the sampling"]
 

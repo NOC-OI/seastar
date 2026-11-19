@@ -66,14 +66,15 @@ shown = rows if show_all else bad
 if shown:
     table = pd.DataFrame([{"Bin": r["bin"], **{LABELS[c]: r[c] for _, c, _, _ in project.QC_COLUMNS},
                            "Flag": r["sample_qc_flag"], "Reasons": r["sample_qc_flags"]} for r in shown])
-    flags = pd.DataFrame([{LABELS[c]: r[c + "_flag"] for _, c, _, _ in project.QC_COLUMNS} | {"Flag": r["sample_qc_flag"]}
-                          for r in shown])
+    flags = pd.DataFrame([{LABELS[c]: r[c + "_flag"] for _, c, check, _ in project.QC_COLUMNS if check}
+                          | {"Flag": r["sample_qc_flag"]} for r in shown])
     styled = table.style.apply(lambda col: [FLAG_COLOURS.get(f, "") for f in flags[col.name]]
                                if col.name in flags.columns else [""] * len(col), axis=0)
     st.dataframe(styled, width="stretch", hide_index=True,
                  column_config={"Reasons": st.column_config.TextColumn(width="large")})
 st.caption("One row per bin, one column per value measured: **orange** = probably bad (flag 3), **red** = bad "
-           "(flag 4), grey = not measured (flag 9); *Flag* is the worst of the bin (1 = good). Flags of the IODE scale, "
+           "(flag 4), grey = not measured (flag 9); *Flag* is the worst of the bin (1 = good). Images and humidity "
+           "have no flag. Provisional checks, to be replaced by the NOC IFCB QC procedure. Flags of the IODE scale, "
            f"used by BODC. Saved in `metadata/{project.QC_CSV}` and put in the EcoTaxa tables (step 5) as sample "
            "columns: each value (`sample_qc_images`, `sample_qc_cut_images_pct`…) with its flag (`…_flag`), the worst "
            "flag (`sample_qc_flag`), the reasons (`sample_qc_flags`) and the procedure, so that doubtful bins are known "
@@ -86,14 +87,17 @@ if bin_problems:
                                     "detail": st.column_config.TextColumn("Detail", width="large")})
 with st.expander("What each check means"):
     st.markdown("""
-- **Few images** (< 10 % of the cruise median), **Small volume analysed** (< 50 %), **Short run** (< 1000 s and
-  < 2.5 mL): a failed acquisition, or a run stopped early.
+These checks are **provisional**, to be replaced by the NOC IFCB QC procedure.
+
+- **Short run** (< 1000 s and < 2.5 mL, bad), **Small volume analysed** (< 50 % of the cruise median, probably bad):
+  a failed acquisition, or a run stopped early.
 - **Few images per trigger** (< 0.9): triggers without an image, images lost.
-- **High humidity** (above the alarm threshold of the `.hdr`): water inside the IFCB.
 - **Stream shifted**, **Stream wide**: the images are not in their usual band of the camera field; bad flow (blocked
   needle, pump).
 - **Many cut images** (> 5 % and > 3 × the cruise median): images touching the left or right edge of the camera field.
-- **Gap in the sampling**: no bin for a long time (instrument stopped, or bins missing from `raw/`).
+- **Gap in the sampling**: no bin for a long time (instrument stopped, or bins missing from `raw/`); not a flag.
+- The number of images and the humidity are given without a flag: a low count is often real (plankton is patchy
+  and follows gradients), and the IFCB stops above its humidity alarm, so an acquired bin never exceeds it.
 
 Sources: the RoiXY graph of IFCBacquire and the IFCB field guide, the WHOI IFCB dashboard, the QC script of the
 California IFCB network (see the protocol).""")

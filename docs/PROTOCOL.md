@@ -154,13 +154,16 @@ other pages; each page shows it at the top, with a **Rescan** button.
   touch the left or right edge and are cut.
 - The table of step 2 has one row per bin and one column per value measured; orange cells are probably bad
   (flag 3), red cells bad (flag 4). The flags follow the IODE scale used by BODC: 1 good, 3 probably bad, 4 bad,
-  9 missing. Bad (4): *Few images*, *Short run*; probably bad (3): the other checks (thresholds to agree with the
-  team). *Why each bin is flagged* gives each reason with the values of the cruise.
+  9 missing. Bad (4): *Short run*; probably bad (3): the other checks. The number of images and the humidity are
+  given without a flag: a low count is often real (plankton is patchy and follows gradients), and the IFCB stops
+  above its humidity alarm, so an acquired bin never exceeds it. **These checks are provisional**, to be replaced by
+  the NOC IFCB QC procedure. *Why each bin is flagged* gives each reason with the values of the cruise.
 - The result is saved in `metadata/qc_bins.csv` and goes into the EcoTaxa tables as sample columns: each value
   (`sample_qc_images`, `sample_qc_ml_analyzed`, `sample_qc_run_time_s`, `sample_qc_images_per_trigger`,
   `sample_qc_humidity_pct`, `sample_qc_stream_y_median_px`, `sample_qc_stream_y_spread_px`,
-  `sample_qc_cut_images_pct`) with its flag (`…_flag`), the worst flag of the bin (`sample_qc_flag`), the reasons
-  (`sample_qc_flags`, `ok` if none) and the procedure (`sample_qc_procedure`): 19 columns. Doubtful bins are then
+  `sample_qc_cut_images_pct`), with its flag (`…_flag`) except the images and the humidity, the worst flag of the
+  bin (`sample_qc_flag`), the reasons (`sample_qc_flags`, `ok` if none) and the procedure (`sample_qc_procedure`):
+  17 columns. Doubtful bins are then
   known before the classification, and can be filtered in EcoTaxa (e.g. `sample_qc_flag` = 1). A later QC procedure
   can write the same file: step 5 only reads it. EcoTaxa accepts 60 `sample_` columns: step 5 warns if a project
   could get more.
@@ -437,19 +440,19 @@ python -c "import ecotaxa; p='Y:/'; print(ecotaxa.compare_report({n: ecotaxa.tab
 | 4 | Bin name typo? | A digit typed wrong or two digits swapped in the spreadsheet |
 | 4 | Position jump (> 20 knots) | A lat/lon typo, or Niskin samples analysed in batches without their Niskin time |
 | 4 | Out of range | A typo (salinity 350 for 35.0), or a unit error |
-| 2 | Few images (< 10 % of the cruise median) | A failed acquisition |
 | 2 | Small volume analysed (< 50 % of the median) | A run stopped early |
+| 2 | (no check) Few images, humidity | Removed after review: a low count is often real (patchy plankton, gradients); the IFCB stops above its humidity alarm |
 | 2 | Gap in the sampling | Instrument stopped, or bins missing from `raw/` |
 | 2 | Short run (< 1000 s and < 2.5 mL) | An incomplete sample |
 | 2 | Few images per trigger (< 0.9) | Triggers without an image: images lost |
-| 2 | High humidity (above the alarm threshold of the `.hdr`, 90 %) | Water inside the IFCB |
 | 2 | Stream shifted (median ROI y > 50 px, or 4 × the usual spread, from the cruise median) | Flow deviated |
 | 2 | Stream wide (ROI y 10–90 % range > 1.5 × the cruise median) | Bad flow: blocked needle, pump |
 | 2 | Many cut images (> 5 % and > 3 × the cruise median touch the left or right edge) | Flow near the edge, or long chains |
 | 3 | Blob not on the particle | Segmentation problem: check focus and the image |
 | Compare | Columns or types differ between cruises | Tables made with different tools or versions |
 
-The instrument checks follow what IFCB users already look at: the RoiXY graph of the acquisition software
+The instrument checks of step 2 are provisional, to be replaced by the NOC IFCB QC procedure. They follow what IFCB
+users already look at: the RoiXY graph of the acquisition software
 IFCBacquire and its "Bad flow, ROIs appear spread out over large area" issue in the
 [IFCB field guide](https://github.com/mrun0205/IFCB_FieldGuide) (sections 6 and 8); the ROI x / ROI y plot shown by
 default for each bin by the [WHOI IFCB dashboard](https://github.com/WHOIGit/ifcbdb); the

@@ -57,8 +57,7 @@ def test_create_and_scan():
         cruise["D20260802T030000_IFCB225"] = {"rois": 12, "ml_analyzed": 1.0, "rois_per_ml": 12}  # failed
         cruise["D20260802T230000_IFCB225"] = {"rois": 3000, "ml_analyzed": 4.5, "rois_per_ml": 666}  # after 16 h
         checks = {(p["check"], p["bin"]) for p in project.check_bins(cruise, t)}
-        assert checks == {("Few images", "D20260802T030000_IFCB225"),
-                          ("Small volume analysed", "D20260802T030000_IFCB225"),
+        assert checks == {("Small volume analysed", "D20260802T030000_IFCB225"),
                           ("Gap in the sampling", "D20260802T230000_IFCB225")}, checks
 
         ok = {"rois": 3000, "ml_analyzed": 4.5, "rois_per_ml": 666, "triggers": 2950, "images_per_trigger": 1.02,
@@ -80,7 +79,8 @@ def test_create_and_scan():
         assert rows["D20260802T060000_IFCB225"]["sample_qc_flags"] == "Small volume analysed; Short run", rows
         r6 = rows["D20260802T060000_IFCB225"]
         assert r6["sample_qc_run_time_s_flag"] == "4" and r6["sample_qc_ml_analyzed_flag"] == "3", r6
-        assert r6["sample_qc_flag"] == "4" and r6["sample_qc_images_flag"] == "1"
+        assert r6["sample_qc_flag"] == "4" and "sample_qc_images_flag" not in r6 and "sample_qc_humidity_pct_flag" not in r6
+        assert rows["D20260802T020000_IFCB225"]["sample_qc_flag"] == "1"  # humidity 93 %: no flag any more
         assert rows["D20260802T050000_IFCB225"]["sample_qc_flag"] == "3"  # many cut images: doubtful
         assert rows["D20260802T070000_IFCB225"]["sample_qc_flag"] == "1"
         assert 20 <= project.count_sample_columns(root) <= project.SAMPLE_COLUMNS_MAX
@@ -88,7 +88,6 @@ def test_create_and_scan():
         binds = project.qc_bindcols(root)
         assert "sample_qc_flags:t:sample_qc_flags" in binds and "sample_qc_cut_images_pct:f:sample_qc_cut_images_pct" in binds
         assert found == {("D20260802T010000_IFCB225", "Few images per trigger"),
-                         ("D20260802T020000_IFCB225", "High humidity"),
                          ("D20260802T030000_IFCB225", "Stream shifted"),
                          ("D20260802T040000_IFCB225", "Stream wide"),
                          ("D20260802T050000_IFCB225", "Many cut images"),

@@ -253,9 +253,12 @@ def cut_percent(stats):
 
 
 # Which figure shows each check of the bins: qc.py colours a bin only in the figures of its reasons.
-BIN_CHECKS = {"Few images": "rois_per_ml", "Small volume analysed": "rois_per_ml", "Short run": "rois_per_ml",
+# Removed 2026-11-19 after Emilie's review: "Few images" (a low count against the cruise median is often real:
+# plankton is patchy and follows gradients) and "High humidity" (the IFCB stops above its alarm threshold, so an
+# acquired bin never exceeds it). The image count and the humidity stay in the QC values, without a flag.
+BIN_CHECKS = {"Small volume analysed": "rois_per_ml", "Short run": "rois_per_ml",
               "Gap in the sampling": "rois_per_ml", "Few images per trigger": "images_per_trigger",
-              "High humidity": "humidity", "Stream shifted": "stream_y_median", "Stream wide": "stream_y_spread",
+              "Stream shifted": "stream_y_median", "Stream wide": "stream_y_spread",
               "Many cut images": "cut_percent"}
 
 
@@ -278,7 +281,7 @@ def check_bins(stats, bin_time):
     def median(k):
         return statistics.median(known(k)) if known(k) else float("nan")
 
-    rois, ml = median("rois"), median("ml_analyzed")
+    ml = median("ml_analyzed")
     y_med, spread = median("stream_y_median"), median("stream_y_spread")
     y_dev = statistics.median(abs(v - y_med) for v in known("stream_y_median")) if known("stream_y_median") else 0
     cut = cut_percent(stats)
@@ -286,8 +289,6 @@ def check_bins(stats, bin_time):
     for b, s in sorted(stats.items()):
         def v(k):
             return s.get(k, float("nan"))
-        if s["rois"] < 0.1 * rois:
-            add("Few images", b, f"{s['rois']:.0f} images, the cruise median is {rois:.0f}: failed acquisition?")
         if s["ml_analyzed"] < 0.5 * ml:
             add("Small volume analysed", b,
                 f"{s['ml_analyzed']:.2f} mL, the cruise median is {ml:.2f} mL: run stopped early?")
@@ -296,8 +297,6 @@ def check_bins(stats, bin_time):
         if v("images_per_trigger") < 0.9:  # California IFCB network QC: images lost
             add("Few images per trigger", b, f"{s['rois']:.0f} images for {v('triggers'):.0f} triggers "
                 f"({v('images_per_trigger'):.2f}): triggers without an image")
-        if v("humidity") > v("humidity_alarm"):
-            add("High humidity", b, f"{v('humidity'):.1f} % inside the IFCB, alarm above {v('humidity_alarm'):.0f} %")
         if abs(v("stream_y_median") - y_med) > max(50, 4 * y_dev):
             add("Stream shifted", b, f"images centred at y = {v('stream_y_median'):.0f} px, the cruise median is "
                 f"{y_med:.0f} px: flow deviated?")
@@ -320,18 +319,19 @@ def check_bins(stats, bin_time):
 # values measured and the reasons, in metadata/, joined to the EcoTaxa tables as sample columns. A later QC procedure
 # (Emilie's) can write the same file: the EcoTaxa step only reads it.
 QC_CSV = "qc_bins.csv"
-# (stat, EcoTaxa column, check that flags it, flag when it does). Flags: IODE scale, as used by BODC:
+# (stat, EcoTaxa column, check that flags it or None for a value without flag, flag when it does). IODE scale (BODC):
 # 1 good, 3 probably bad (doubtful), 4 bad (failed), 9 missing value. Thresholds of 3 or 4 to agree with the team.
-QC_COLUMNS = [("rois", "sample_qc_images", "Few images", 4),
+QC_COLUMNS = [("rois", "sample_qc_images", None, None),  # value only, no flag (see BIN_CHECKS)
               ("ml_analyzed", "sample_qc_ml_analyzed", "Small volume analysed", 3),
               ("run_time", "sample_qc_run_time_s", "Short run", 4),
               ("images_per_trigger", "sample_qc_images_per_trigger", "Few images per trigger", 3),
-              ("humidity", "sample_qc_humidity_pct", "High humidity", 3),
+              ("humidity", "sample_qc_humidity_pct", None, None),
               ("stream_y_median", "sample_qc_stream_y_median_px", "Stream shifted", 3),
               ("stream_y_spread", "sample_qc_stream_y_spread_px", "Stream wide", 3),
               ("cut_percent", "sample_qc_cut_images_pct", "Many cut images", 3)]
 QC_GOOD, QC_MISSING = 1, 9
-QC_PROCEDURE = "IFCB app raw data check (IFCB field guide, WHOI IFCB dashboard, California IFCB network QC)"
+QC_PROCEDURE = ("Provisional IFCB app checks (IFCB field guide, WHOI IFCB dashboard, California IFCB network QC), "
+                "to be replaced by the NOC IFCB QC procedure")
 SAMPLE_COLUMNS_MAX = 60  # EcoTaxa accepts at most 60 sample_ columns
 
 
@@ -350,8 +350,9 @@ def qc_rows(stats, problems):
             v = cut.get(b) if key == "cut_percent" else s.get(key)
             missing = v is None or v != v  # None or NaN
             row[column] = "" if missing else int(v) if float(v).is_integer() else v  # 847, not 847.0
-            row[column + "_flag"] = QC_MISSING if missing else bad if check in reasons.get(b, []) else QC_GOOD
-            flags.append(row[column + "_flag"])
+            if check:
+                row[column + "_flag"] = QC_MISSING if missing else bad if check in reasons.get(b, []) else QC_GOOD
+                flags.append(row[column + "_flag"])
         known = [f for f in flags if f != QC_MISSING]
         row["sample_qc_flag"] = max(known) if known else QC_MISSING
         row["sample_qc_flags"] = "; ".join(reasons.get(b, [])) or "ok"
