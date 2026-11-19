@@ -4,7 +4,7 @@ How to take the data of one Imaging FlowCytobot (IFCB) cruise from the raw files
 EcoTaxa, at the National Oceanography Centre. It covers the two ways of working:
 
 - **the app** (Windows, in the web browser): every step, with the checks and the figures;
-- **the command line**: the long steps (features, EcoTaxa zips, blobs), for scripts or for a remote machine.
+- **the command line** (Python): every step too, with the same checks and figures, for scripts or for a remote machine.
 
 Tools: the IFCB → EcoTaxa app (`ifcb_app/` in [amandaelineau-stack/seastar](https://github.com/amandaelineau-stack/seastar)),
 [WHOI ifcb-features](https://github.com/WHOIGit/ifcb-features) v1.3.1 for the features, and SeaSTAR
@@ -253,6 +253,12 @@ python make_metadata.py Y:\ifcb_sn225_jc278_pap2025new Y:\ifcb_sn225_jc278_pap20
 - Without `--check-only`, writes `metadata/metadata_ecotaxa.csv` and `log/metadata_check_<date>.txt`.
 - `--sheet NAME` for an Excel sheet other than the first, `--bin-column COLUMN` if the bin names are not found.
   Without a spreadsheet path, it uses the one of the last run.
+- A value that is not in the list of fields yet (e.g. oxygen): add it with
+  `--add-field FIELD:COLUMN:TYPE[:UNIT[:MIN[:MAX[:DEFAULT[:DESCRIPTION]]]]]` and map it in the same command:
+  `--add-field oxygen:sample_oxygen:f:umol/kg:0:500 --map oxygen="O2 (umol/kg)"`. TYPE is `f` (number) or `t` (text);
+  the EcoTaxa column starts with `sample_`, `object_`, `acq_` or `process_`; MIN and MAX are the expected range (out of
+  it = a point to check). The field goes into `ifcb_app/metadata_columns.csv`, the list shared by every project (also
+  with `--check-only`), and a number field gets its own QC figures. Running the same command again adds nothing.
 
 ### Quality check figures
 
@@ -263,6 +269,17 @@ python make_figures.py Y:\ifcb_sn225_jc278_pap2025new
 - Saves the map and the figures as PNG in `figures/`, and the bins that look failed and the gaps in the sampling in
   `log/bins_check_<date>.txt`; prints the list.
 - Uses the image counts made by the feature extraction; bins not counted yet are counted first (slow on Y:\).
+
+### Images and their blobs
+
+```bash
+python show_blobs.py Y:\ifcb_sn225_jc278_pap2025new D20250810T164958_IFCB225 --seed 1
+```
+
+- Saves 12 images of the bin above their blob in `figures/blobs_<bin>_seed<seed>.png` and opens it. Check that each
+  blob covers the particle, not the background or a bubble.
+- Without a bin, shows the first bin with blobs and gives the range of bins. `--seed 2`, `3`… picks other images,
+  `--n 18` shows more. All images have the same scale, so their sizes can be compared.
 
 ### EcoTaxa zips
 
@@ -323,6 +340,7 @@ python -c "import ecotaxa; p='Y:/'; print(ecotaxa.compare_report({n: ecotaxa.tab
 | `metadata/metadata_ecotaxa.csv` / `.json` | step 3 | metadata with the EcoTaxa names, types and choices |
 | `log/metadata_check_<date>.txt` | step 3 | the points to check, with their spreadsheet rows |
 | `figures/qc_*.png` | step 4 | map and figures |
+| `figures/blobs_<bin>_seed<n>.png` | `show_blobs.py` | images above their blobs |
 | `ecotaxa_import_zip_seastar/<NAME>_<bin>.zip` | step 5 | the files to import into EcoTaxa |
 | `log/ecotaxa_<date>.log`, `log/ecotaxa_settings.json` | step 5 | each zip done or failed, the names typed |
 

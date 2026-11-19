@@ -1,7 +1,7 @@
 """Step 3 on the command line: the sample spreadsheet -> metadata/metadata_ecotaxa.csv, with the checks.
 
     python make_metadata.py <project folder> [<spreadsheet>] [--sheet NAME] [--bin-column COLUMN]
-                            [--map FIELD=COLUMN ...] [--default FIELD=VALUE ...] [--check-only]
+                            [--map FIELD=COLUMN ...] [--default FIELD=VALUE ...] [--add-field ...] [--check-only]
 
 Which spreadsheet column fills each field, in this order of priority:
   1. --map and --default given here;
@@ -9,6 +9,9 @@ Which spreadsheet column fills each field, in this order of priority:
   3. the columns whose names look like the field, as the app proposes them, and the field's value if empty.
 The columns used are printed, so check them. The points to check are printed and saved in
 log/metadata_check_<date>.txt. With --check-only nothing is written.
+
+A field that is not in the list yet: --add-field oxygen:sample_oxygen:f:umol/kg:0:500 --map oxygen="O2 (umol/kg)"
+adds it to metadata_columns.csv for every project (and the QC figures plot it if it is a number).
 """
 import argparse
 import os
@@ -29,6 +32,27 @@ def pairs(values, option):
     return out
 
 
+FIELD_PARTS = ["field", "ecotaxa_column", "type_", "unit", "min_", "max_", "default", "description"]
+
+
+def add_field(spec):
+    """--add-field FIELD:COLUMN:TYPE[:UNIT[:MIN[:MAX[:DEFAULT[:DESCRIPTION]]]]] -> the shared list. Running the same
+    command again is fine: a field already there with the same EcoTaxa column is left as it is."""
+    parts = dict(zip(FIELD_PARTS, spec.split(":", len(FIELD_PARTS) - 1)))
+    if len(parts) < 3:
+        sys.exit(f"--add-field {spec!r}: write it FIELD:COLUMN:TYPE[:UNIT[:MIN[:MAX[:DEFAULT[:DESCRIPTION]]]]], "
+                 "e.g. --add-field oxygen:sample_oxygen:f:umol/kg:0:500")
+    old = {f["field"]: f for f in metadata.load_fields()}.get(parts["field"].strip().lower())
+    if old and old["ecotaxa_columns"] == parts["ecotaxa_column"].strip().lower():
+        return
+    try:
+        metadata.add_field(**parts)
+    except ValueError as e:
+        sys.exit(f"--add-field {spec!r}: " + (str(e) if "convert" not in str(e) else "MIN and MAX must be numbers"))
+    print(f"Added the field {parts['field']} ({parts['ecotaxa_column']}) to {metadata.FIELDS_CSV}: "
+          "it is now in the list of every project.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("project")
@@ -37,7 +61,11 @@ def main():
     parser.add_argument("--bin-column", help="column with the bin names; default: found from the values")
     parser.add_argument("--map", action="append", metavar="FIELD=COLUMN", help="spreadsheet column of a field")
     parser.add_argument("--default", action="append", metavar="FIELD=VALUE", help="value used when the cell is empty")
-    parser.add_argument("--check-only", action="store_true", help="print the checks, write nothing")
+    parser.add_argument("--add-field", action="append", metavar="FIELD:COLUMN:TYPE[:UNIT[:MIN[:MAX[:DEFAULT[:DESCRIPTION]]]]]",
+                        help="add a field to the list shared by every project (TYPE f = number, t = text), "
+                             "e.g. oxygen:sample_oxygen:f:umol/kg:0:500; then --map it")
+    parser.add_argument("--check-only", action="store_true",
+                        help="print the checks, write nothing (except the fields of --add-field)")
     args = parser.parse_args()
 
     root = os.path.abspath(args.project)
@@ -52,6 +80,8 @@ def main():
     bin_column = args.bin_column or (saved.get("bin_column") if same_file else None) or metadata.guess_bin_column(columns, rows)
     if bin_column not in columns:
         sys.exit(f"No column {bin_column!r} with the bin names. Columns: {', '.join(columns)}")
+    for spec in args.add_field or []:
+        add_field(spec)
     fields = {f["field"]: f for f in metadata.load_fields()}
     maps, defaults = pairs(args.map, "--map"), pairs(args.default, "--default")
     for name in list(maps) + list(defaults):

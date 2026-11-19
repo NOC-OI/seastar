@@ -106,8 +106,9 @@ A feature extraction runs as its own process. It goes on if the browser tab is c
 | `project.py` | Naming, creating and scanning a project folder (no interface code) |
 | `metadata.py` | Builds `metadata_ecotaxa.csv` from the spreadsheet and the chosen columns, and the checks (no interface code) |
 | `metadata_columns.csv` | The shared list of metadata fields: EcoTaxa column(s), type `f`/`t`, unit, value if empty, expected range. Columns added from the page are written here |
-| `make_metadata.py` | Step 3 on the command line: `python make_metadata.py <project folder> <spreadsheet> [--check-only]` (prints the columns used and the checks) |
+| `make_metadata.py` | Step 3 on the command line: `python make_metadata.py <project folder> <spreadsheet> [--check-only]` (prints the columns used and the checks; `--add-field` adds a new field to the shared list) |
 | `make_figures.py` | Step 4 on the command line: `python make_figures.py <project folder>` |
+| `show_blobs.py` | 12 images of a bin above their blobs, as a PNG in `figures/`: `python show_blobs.py <project folder> [<bin>] [--seed N]` |
 | `qc.py` | The quality check figures, used by the page and by `make_figures.py` (no interface code) |
 | `make_ecotaxa.py` | The EcoTaxa zips started by the page; it can also be run alone: `python make_ecotaxa.py <project folder> --operator "Full Name" --blobs` (`--help` for the other options) |
 | `extract_features.py` | The feature extraction started by the page; it can also be run alone: `python extract_features.py <project folder> --workers 8` |
