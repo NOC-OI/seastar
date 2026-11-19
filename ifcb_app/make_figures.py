@@ -49,12 +49,14 @@ def main():
     df, variables, depth = qc.frame(stats, meta_rows, meta_problems + problems)
     saved = qc.save(root, qc.charts(df, variables, depth), df, force=True)
     report = metadata.write_report(os.path.join(root, "log"), problems, len(bins), "log/bin_stats.csv", "bins_check")
+    qc_file = project.write_qc(root, stats, problems)
 
     print(f"{len(bins)} bins, {len(problems)} to look at:")
     for p in problems:
         print(f"  {p['check']}: {p['bin']} {p['detail']}")
     print(f"\n{len(saved['files'])} figures in {os.path.join(root, 'figures')}: {', '.join(saved['files'])}")
     print(f"Report: {report}")
+    print(f"QC results for the EcoTaxa tables (sample_qc_ columns): {qc_file}")
 
 
 if __name__ == "__main__":

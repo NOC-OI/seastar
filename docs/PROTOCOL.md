@@ -152,6 +152,13 @@ other pages; each page shows it at the top, with a **Rescan** button.
 - Look at **Position of the images in the camera field** (ROI x against ROI y of one bin; the flagged bins first):
   the images should form one compact band. Spread out or moved, the flow is bad (blocked needle, pump); orange images
   touch the left or right edge and are cut.
+- The result of the checks is saved in `metadata/qc_bins.csv` (one row per bin) and goes into the EcoTaxa
+  tables as sample columns: the values measured (`sample_qc_images`, `sample_qc_ml_analyzed`,
+  `sample_qc_run_time_s`, `sample_qc_images_per_trigger`, `sample_qc_humidity_pct`,
+  `sample_qc_stream_y_median_px`, `sample_qc_stream_y_spread_px`, `sample_qc_cut_images_pct`), the reasons
+  (`sample_qc_flags`, `ok` if none), their number (`sample_qc_n_flags`) and the procedure
+  (`sample_qc_procedure`). Doubtful bins are then known before the classification, and can be filtered in
+  EcoTaxa (e.g. `sample_qc_n_flags` = 0). A later QC procedure can write the same file: step 5 only reads it.
 
 ### Step 3 · Features
 
@@ -317,6 +324,8 @@ python make_figures.py Y:\ifcb_sn225_jc278_pap2025new
 - Reads the `.adc` and `.hdr` of the bins not read yet (slow on Y:\; the feature extraction also reads them). Before
   the metadata, it plots the concentration and the instrument values only; run it again after step 4 for the map
   and the environmental values. Move the failed bins out of `raw/` before step 3.
+- Writes `metadata/qc_bins.csv`, the result of the checks for the EcoTaxa tables (`sample_qc_` columns, see the app
+  protocol, step 2).
 - As in the app, each figure colours only the bins flagged for a reason it shows, with the reason in the legend (the
   metadata points come from the last `log/metadata_check_<date>.txt`).
 
@@ -454,6 +463,7 @@ files.
 | `log/features_<date>.log`, `log/features_status.json` | step 3 | each bin done or failed |
 | `log/bin_stats.csv` | step 2 (or 3) | images, mL analysed and concentration per bin |
 | `metadata/metadata_ecotaxa.csv` / `.json` | step 4 | metadata with the EcoTaxa names, types and choices |
+| `metadata/qc_bins.csv` | step 2 | the result of the raw data check per bin, put in the EcoTaxa tables (`sample_qc_` columns) |
 | `log/metadata_check_<date>.txt` | step 4 | the points to check, with their spreadsheet rows |
 | `figures/qc_*.png` | steps 2 and 4 | map and figures |
 | `figures/blobs_<bin>_seed<n>.png` | `show_blobs.py` | images above their blobs |

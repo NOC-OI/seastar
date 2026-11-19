@@ -75,6 +75,7 @@ def make_one(root, bin_name, raw_path, args, bindcols, stats=None):
         inputs = [raw_path + ext for ext in (".hdr", ".adc", ".roi")]
         inputs.append(project.feature_file(features_dir, bin_name))
         for p in (one_row_csv(os.path.join(root, "metadata", metadata.OUTPUT_CSV), tmp, "metadata.csv", bin_name),
+                  one_row_csv(os.path.join(root, "metadata", project.QC_CSV), tmp, "qc.csv", bin_name),
                   one_row_csv(os.path.join(features_dir, project.VERSIONS_CSV), tmp, "versions.csv", bin_name)):
             if p:
                 inputs.append(p)
@@ -127,6 +128,7 @@ def main():
     stats = project.load_stats(root)  # image counts, to check the feature files
     columns = metadata.read_choices(os.path.join(root, "metadata")).get("columns", {})
     bindcols = metadata.bindcol_args(columns) if os.path.isfile(os.path.join(root, "metadata", metadata.OUTPUT_CSV)) else []
+    bindcols += project.qc_bindcols(root)  # the result of the raw data check, as sample_qc_ columns
     status = {"pid": os.getpid(), "started": datetime.now().isoformat(timespec="seconds"), "workers": args.workers,
               "blobs": args.blobs, "total": len(todo), "done": 0, "errors": [], "finished": None}
     status_path = os.path.join(log_dir, "ecotaxa_status.json")

@@ -74,6 +74,14 @@ def test_create_and_scan():
         for b, change in bad.items():
             cruise[b].update(change)
         found = {(p["bin"], p["check"]) for p in project.check_bins(cruise, t)}
+        import csv
+        qc_file = project.write_qc(root, cruise, project.check_bins(cruise, t))
+        rows = {r["bin"]: r for r in csv.DictReader(open(qc_file, encoding="utf-8"))}
+        assert rows["D20260802T060000_IFCB225"]["sample_qc_flags"] == "Small volume analysed; Short run", rows
+        assert rows["D20260802T060000_IFCB225"]["sample_qc_n_flags"] == "2"
+        assert rows["D20260802T070000_IFCB225"]["sample_qc_flags"] == "ok" and rows["D20260802T070000_IFCB225"]["sample_qc_images"] == "3000"
+        binds = project.qc_bindcols(root)
+        assert "sample_qc_flags:t:sample_qc_flags" in binds and "sample_qc_cut_images_pct:f:sample_qc_cut_images_pct" in binds
         assert found == {("D20260802T010000_IFCB225", "Few images per trigger"),
                          ("D20260802T020000_IFCB225", "High humidity"),
                          ("D20260802T030000_IFCB225", "Stream shifted"),

@@ -45,6 +45,7 @@ else:
     stats = project.bin_stats(str(folder), bins)
 
 bin_problems = project.check_bins(stats, metadata.bin_time)
+project.write_qc(str(folder), stats, bin_problems)  # for the EcoTaxa tables, step 5
 if bin_problems:
     summary = pd.Series([p["check"] for p in bin_problems]).value_counts()
     st.warning(f"**{len(bin_problems)} bin(s) to look at**: " + " · ".join(f"{c} ({n})" for c, n in summary.items())
@@ -53,6 +54,10 @@ if bin_problems:
                  column_config={"detail": st.column_config.TextColumn("Detail", width="large")})
 else:
     st.success(f"No bin to look at among the {len(stats)} bins.")
+st.caption(f"The result of these checks is saved in `metadata/{project.QC_CSV}` and goes into the EcoTaxa tables "
+           "(step 5) as sample columns: the values measured (`sample_qc_images`, `sample_qc_cut_images_pct`, "
+           "`sample_qc_humidity_pct`…), the reasons (`sample_qc_flags`, `ok` if none) and their number "
+           "(`sample_qc_n_flags`), so that doubtful bins are known before the classification.")
 with st.expander("What each check means"):
     st.markdown("""
 - **Few images** (< 10 % of the cruise median), **Small volume analysed** (< 50 %), **Short run** (< 1000 s and

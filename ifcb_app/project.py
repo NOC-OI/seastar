@@ -316,6 +316,48 @@ def check_bins(stats, bin_time):
     return problems
 
 
+# The result of the raw data check for EcoTaxa (option B chosen by Amanda, 2026-11-19): one row per bin with the
+# values measured and the reasons, in metadata/, joined to the EcoTaxa tables as sample columns. A later QC procedure
+# (Emilie's) can write the same file: the EcoTaxa step only reads it.
+QC_CSV = "qc_bins.csv"
+QC_COLUMNS = [("rois", "sample_qc_images"), ("ml_analyzed", "sample_qc_ml_analyzed"), ("run_time", "sample_qc_run_time_s"),
+              ("images_per_trigger", "sample_qc_images_per_trigger"), ("humidity", "sample_qc_humidity_pct"),
+              ("stream_y_median", "sample_qc_stream_y_median_px"), ("stream_y_spread", "sample_qc_stream_y_spread_px"),
+              ("cut_percent", "sample_qc_cut_images_pct")]
+QC_PROCEDURE = "IFCB app raw data check (IFCB field guide, WHOI IFCB dashboard, California IFCB network QC)"
+
+
+def write_qc(root, stats, problems):
+    """metadata/qc_bins.csv from the bin stats and the problems of check_bins: the values, the reasons
+    (sample_qc_flags, "ok" if none; a gap before a bin is not a problem of the bin) and their number. Returns its path."""
+    cut = cut_percent(stats)
+    reasons = {}
+    for p in problems:
+        if p["bin"] and p["check"] != "Gap in the sampling":
+            reasons.setdefault(p["bin"], []).append(p["check"])
+    path = os.path.join(root, "metadata", QC_CSV)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["bin"] + [c for _, c in QC_COLUMNS] + ["sample_qc_flags", "sample_qc_n_flags", "sample_qc_procedure"])
+        for b, s in sorted(stats.items()):
+            values = [cut.get(b, "") if k == "cut_percent" else s.get(k, "") for k, _ in QC_COLUMNS]
+            values = [int(v) if isinstance(v, float) and v.is_integer() else v for v in values]  # 847, not 847.0
+            flags = reasons.get(b, [])
+            w.writerow([b] + values + ["; ".join(flags) or "ok", len(flags), QC_PROCEDURE])
+    return path
+
+
+def qc_bindcols(root):
+    """--bindcol options of the columns of metadata/qc_bins.csv (text for the flags and the procedure), or []."""
+    path = os.path.join(root, "metadata", QC_CSV)
+    if not os.path.isfile(path):
+        return []
+    with open(path, newline="", encoding="utf-8") as f:
+        header = next(csv.reader(f), [])
+    return [f"{c}:{'t' if c in ('sample_qc_flags', 'sample_qc_procedure') else 'f'}:{c}" for c in header if c != "bin"]
+
+
 def roi_positions(root, bin_name):
     """[{roi, x, y, width, height}] of the images of a bin, from its .adc (ROI x, y: top left corner, pixels)."""
     from ifcbkit.adc import parse_adc_file
@@ -464,6 +506,9 @@ def warnings(root, step):
                        "extract_features.py first. " + _some(without))
         if not os.path.isfile(os.path.join(root, "metadata", "metadata_ecotaxa.csv")):
             out.append("No metadata file yet (make_metadata.py): the zips would have no sample metadata.")
+        if not os.path.isfile(os.path.join(root, "metadata", QC_CSV)):
+            out.append("No result of the raw data check yet (step 2, make_figures.py): the zips would have no "
+                       "sample_qc_ columns.")
         for name, script in (("metadata_check", "make_metadata.py"), ("bins_check", "make_figures.py")):
             report = last_report(root, name)
             if report is None:
