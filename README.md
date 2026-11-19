@@ -45,13 +45,13 @@ $ seastar ifcb_v4_features -i raw/D20250810/*.hdr -o features/D20250810/
 $ seastar ifcb_to_ecotaxa -i raw/D20250810/*.hdr ./metadata/A16N_metadata_filtered.csv --operator "Sample Operator" --qcdby "Sample Supervisor" --project "Sample Project" --nonull --ship "Sample Ship" --depth 5 -o
 ```
 
-## IFCB → EcoTaxa app
+## IFCB → EcoTaxa pipeline
 
-<img src="docs/ifcb_app_icon.png" alt="IFCB pipeline app icon: the IFCB instrument, an arrow, and a grid of plankton vignettes" width="128" align="right">
+Takes an IFCB cruise from the raw files to the EcoTaxa import files, in five steps. Every step runs **on the command line** (Python scripts) or **in a desktop app** (a [Streamlit](https://streamlit.io) page): both use the same code and write the same files, so a cruise can be started in one and finished in the other. Everything runs on your own computer, so no data leaves it, and the EcoTaxa tables are made by SeaSTAR. The code is in [`ifcb_app/`](ifcb_app).
 
-A desktop app, in development, that takes an IFCB cruise from the raw files to the EcoTaxa import files without the command line. It is a [Streamlit](https://streamlit.io) page that runs on your own computer, so no data leaves it, and it uses SeaSTAR for the EcoTaxa tables. The code is in [`ifcb_app/`](ifcb_app).
+**Go to:** [command line with Python](#command-line-with-python) · [the app](#the-app) · [the protocol](docs/PROTOCOL.md)
 
-The app follows the folder layout of the NOC IFCB projects:
+The pipeline follows the folder layout of the NOC IFCB projects:
 
 ```
 ifcb_sn<serial>_<cruise ID>_<name>/          e.g. ifcb_sn225_ce26008_ar7e
@@ -64,7 +64,7 @@ ifcb_sn<serial>_<cruise ID>_<name>/          e.g. ifcb_sn225_ce26008_ar7e
     ecotaxa_import_zip_seastar/
 ```
 
-| Step | What it does | Status |
+| Step (app section) | What it does | Status |
 |---|---|---|
 | 1 · Choose the IFCB project | Opens a project with **Browse…** or creates one with the right folder names. Shows, per day, the number of bins, complete bins (hdr + adc + roi), feature files and EcoTaxa zips, and highlights the days where they differ. | Done |
 | 2 · Extract the features | [WHOI ifcb-features](https://github.com/WHOIGit/ifcb-features) v1.3.1 (August 2026): the 30 features of the WHOI MATLAB code and the blob masks. Runs in the background on several cores, skips the bins already done, shows the progress and the time left. The WHOI version (tag and commit) is recorded for each bin and goes to EcoTaxa as `process_feature_extractor` and `process_feature_extractor_release`. | Done |
@@ -76,29 +76,53 @@ A second page, **Compare EcoTaxa tables**, compares the tables of several projec
 
 The step-by-step protocol, for the app and for the command line, with diagrams of what the pipeline does: [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
-### Starting the app
+### Command line with Python
+
+Every step runs in Python, on Windows, Linux or WSL. Install once, from the `ifcb_app` folder (needs [git](https://git-scm.com), for WHOI ifcb-features and SeaSTAR):
+
+```
+cd ifcb_app
+pip install -r requirements.txt
+```
+
+Then, for a cruise, in this order (`<project>` is the project folder, e.g. `Y:\ifcb_sn225_ce26008_ar7e`):
+
+| Step | Command | Options |
+|---|---|---|
+| 1 · Create the project | `python create_project.py <parent folder> --serial 225 --cruise-id ce26008 --name ar7e` | On an existing project, adds only its missing folders. Then copy the IFCB day folders (`DYYYYMMDD`) into `raw/` |
+| Before each step | `python project_status.py <project>` | Bins, features and zips per day, and the warnings: incomplete bins, bins without features, no metadata, points to check, failed runs, WHOI version |
+| 2 · Features | `python extract_features.py <project> --workers 8` | Skips the bins already done, so it can be run again after a stop |
+| 3 · Metadata: check | `python make_metadata.py <project> <spreadsheet> --check-only` | Prints the column used for each field and what to correct; writes nothing. Correct the spreadsheet and run it again |
+| 3 · Metadata: write | `python make_metadata.py <project> <spreadsheet>` | `--map FIELD=COLUMN`, `--default FIELD=VALUE`, `--add-field oxygen:sample_oxygen:f:umol/kg:0:500`, `--sheet NAME`, `--bin-column COLUMN` |
+| 4 · Quality check | `python make_figures.py <project>` | Figures in `figures/`, failed bins and gaps in `log/bins_check_<date>.txt` |
+| 4 · Blobs | `python show_blobs.py <project> [<bin>]` | `--seed N` for other images, `--n 18` for more |
+| 5 · EcoTaxa tables | `python make_ecotaxa.py <project> --operator "Full Name" --blobs` | `--qcdby`, `--project-name`, `--ship`, `--cruise`, `--workers`; without `--blobs`, no blobs |
+| Blobs for zips made by `seastar ifcb_to_ecotaxa` | `python ecotaxa.py --blobs <project> <zip> [<zip> ...]` | Running it twice adds nothing |
+
+Every script has `--help`. The protocol gives examples and what each check means: [docs/PROTOCOL.md](docs/PROTOCOL.md).
+
+### The app
+
+<img src="docs/ifcb_app_icon.png" alt="IFCB pipeline app icon: the IFCB instrument, an arrow, and a grid of plankton vignettes" width="128" align="right">
+
+The same five steps as numbered sections of one page, with **Browse…** buttons for the folders and the spreadsheet, progress bars, the figures and the images shown on the page.
 
 On Windows:
 
 1. Double-click `ifcb_app/create_shortcut.bat` once: it puts an **IFCB pipeline** shortcut on the desktop.
 2. Start the app from that shortcut. Keep the black window open while you use the app, and close it to stop the app.
 
-The launcher (`start_ifcb_app.bat`) uses the conda environment `ifcb_app` when there is one, otherwise the Python of the computer. On the first start, it installs the requirements (Streamlit, pandas, Pillow, openpyxl, vl-convert, WHOI ifcb-features and SeaSTAR from the `all-fixes` branch of this fork, which gathers the fixes of the pull requests above until they are merged). Installing WHOI ifcb-features needs [git](https://git-scm.com).
+The launcher (`start_ifcb_app.bat`) uses the conda environment `ifcb_app` when there is one, otherwise the Python of the computer. On the first start, it installs the requirements (Streamlit, pandas, Pillow, openpyxl, vl-convert, WHOI ifcb-features and SeaSTAR from the `all-fixes` branch of this fork, which gathers the SeaSTAR fixes of pull request #18 until they are merged). Installing WHOI ifcb-features needs [git](https://git-scm.com).
 
-On any system:
+On any system, after the install of the command line section: `python -m streamlit run app.py` in `ifcb_app`.
 
-```
-cd ifcb_app
-pip install -r requirements.txt
-python -m streamlit run app.py
-```
-
-A feature extraction runs as its own process. It goes on if the browser tab is closed, as long as the computer stays on and awake. On one core, a bin of about 5,000 ROIs takes about 2 minutes.
+The feature extraction and the EcoTaxa tables started from the app run as their own process. They go on if the browser tab is closed, as long as the computer stays on and awake. On one core, a bin of about 5,000 ROIs takes about 2 minutes to extract.
 
 ### Files
 
 | File | Role |
 |---|---|
+| `create_project.py`, `project_status.py`, `extract_features.py`, `make_metadata.py`, `make_figures.py`, `show_blobs.py`, `make_ecotaxa.py` | The command line, one script per step (table above). The app starts `extract_features.py` and `make_ecotaxa.py` itself |
 | `app.py` | Starts the app and its two pages (menu on the left) |
 | `process.py` | Page 1, **Process a project**: steps 1 to 5 |
 | `compare.py` | Page 2, **Compare EcoTaxa tables**: a text report comparing the column names and types of the EcoTaxa tables of several projects, run when you click Compare |
@@ -106,15 +130,8 @@ A feature extraction runs as its own process. It goes on if the browser tab is c
 | `project.py` | Naming, creating and scanning a project folder (no interface code) |
 | `metadata.py` | Builds `metadata_ecotaxa.csv` from the spreadsheet and the chosen columns, and the checks (no interface code) |
 | `metadata_columns.csv` | The shared list of metadata fields: EcoTaxa column(s), type `f`/`t`, unit, value if empty, expected range. Columns added from the page are written here |
-| `create_project.py` | Step 1 on the command line: `python create_project.py <parent folder> --serial 225 --cruise-id ce26008 --name ar7e` |
-| `project_status.py` | Where a project stands and the warnings of the app, on the command line: `python project_status.py <project folder>` |
-| `make_metadata.py` | Step 3 on the command line: `python make_metadata.py <project folder> <spreadsheet> [--check-only]` (prints the columns used and the checks; `--add-field` adds a new field to the shared list) |
-| `make_figures.py` | Step 4 on the command line: `python make_figures.py <project folder>` |
-| `show_blobs.py` | 12 images of a bin above their blobs, as a PNG in `figures/`: `python show_blobs.py <project folder> [<bin>] [--seed N]` |
 | `qc.py` | The quality check figures, used by the page and by `make_figures.py` (no interface code) |
-| `make_ecotaxa.py` | The EcoTaxa zips started by the page; it can also be run alone: `python make_ecotaxa.py <project folder> --operator "Full Name" --blobs` (`--help` for the other options) |
-| `extract_features.py` | The feature extraction started by the page; it can also be run alone: `python extract_features.py <project folder> --workers 8` |
 | `whoi/extract_slim_features.py` | Copied unchanged from WHOI ifcb-features v1.3.1 (MIT licence, `whoi/LICENSE`): this script is not part of the pip package |
-| `ecotaxa.py` | Adds the blobs to the EcoTaxa zip made by SeaSTAR, as `img_rank` 1 rows. From the command line, after `seastar ifcb_to_ecotaxa`: `python ecotaxa.py --blobs <project folder> <zip> [<zip> ...]` (running it twice adds nothing) |
+| `ecotaxa.py` | Adds the blobs to the EcoTaxa zips made by SeaSTAR, as `img_rank` 1 rows (used by `make_ecotaxa.py --blobs`, or alone: table above) |
 | `test_project.py`, `test_metadata.py`, `test_ecotaxa.py` | Tests: `python test_project.py`, `python test_metadata.py`, `python test_ecotaxa.py` |
 | `make_icon.py` | Draws `ifcb_app.ico` and `docs/ifcb_app_icon.png` |
