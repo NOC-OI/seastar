@@ -50,10 +50,27 @@ def project_status(folder):
     return True, "complete IFCB project"
 
 
+LAST_PROJECT = Path.home() / ".ifcb_app_last_project.txt"
+
+
 def chosen_project():
-    """The project chosen in step 1 (Path), or None."""
+    """The project chosen in step 1 (Path), or None. Remembered on this computer: a new tab, a reloaded page or the
+    app started again opens the last project, without going back to step 1."""
     p = st.session_state.get("project")
-    return Path(p) if p and Path(p).is_dir() else None
+    try:
+        last = LAST_PROJECT.read_text(encoding="utf-8").strip()
+    except OSError:
+        last = ""
+    if not p and last:
+        st.session_state["project"] = p = last
+    if not (p and Path(p).is_dir()):
+        return None
+    if p != last:
+        try:
+            LAST_PROJECT.write_text(p, encoding="utf-8")
+        except OSError:
+            pass  # not remembered: only step 1 is asked again next time
+    return Path(p)
 
 
 def current_project():
