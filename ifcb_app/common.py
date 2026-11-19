@@ -183,8 +183,9 @@ def _progress(folder):
     eco = extraction_status(folder, "ecotaxa")
     if eco and eco.get("running"):
         out[5] = ("running", f"running: {eco['done']} / {plural_bins(eco['total'])}")
-    elif n_zip < n_feat:
-        out[5] = ("todo", f"{plural_bins(n_feat - n_zip)} with features without a zip")
+    elif n_zip < n_bins:  # done only when every complete bin has its zip
+        out[5] = ("todo", f"{plural_bins(n_bins - n_zip)} without a zip"
+                  + (f" ({n_feat - n_zip} ready: features done)" if n_feat > n_zip else ""))
     elif eco and eco.get("errors"):
         out[5] = ("check", f"{plural_bins(len(eco['errors']))} failed in the last run")
     else:
