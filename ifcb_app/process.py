@@ -351,7 +351,7 @@ if saved:
     st.caption(f"Metadata file last written {saved['written'].replace('T', ' ')}: "
                f"`metadata/{metadata.OUTPUT_CSV}` ({len(saved['columns'])} columns).")
 
-meta_rows, flagged = None, set()
+meta_rows, flagged, meta_problems = None, set(), []
 if ok:
     mtime = sheet_path.stat().st_mtime
     sheet = None
@@ -405,7 +405,7 @@ if ok:
         report = metadata.write_report(str(folder / "log"), problems, len(out), str(sheet_path))
         st.success(f"Written: `metadata/{metadata.OUTPUT_CSV}`, {len(out)} bins, {len(out_columns) - 1} columns. "
                    f"Check report: `log/{Path(report).name}`.")
-    meta_rows, flagged = out, {p["bin"] for p in problems if p["bin"]}
+    meta_rows, flagged, meta_problems = out, {p["bin"] for p in problems if p["bin"]}, problems
 
 with st.expander("Add an EcoTaxa column to the list"):
     st.caption("For a measurement that is not in the list yet. It is added for every future project "
@@ -433,23 +433,24 @@ with st.expander("Add an EcoTaxa column to the list"):
 
 
 def known_stats(root):
-    """Bins already counted in log/bin_stats.csv (reading the others means reading their .adc files)."""
-    path = Path(root) / "log" / project.STATS_CSV
-    return set(pd.read_csv(path, usecols=["bin"])["bin"]) if path.is_file() else set()
+    """Bins already counted in log/bin_stats.csv with every value (reading the others means reading their .adc)."""
+    return {b for b, s in project.load_stats(str(root)).items() if project.stats_complete(s)}
 
 
 st.header("4 · Quality check figures")
 st.caption("Look at the data before making the EcoTaxa tables: a point far from the others is often a typo. "
            "Particle concentration = images of the bin / volume analysed (0.25 mL/min × (runTime − inhibitTime), "
-           "from the .hdr). Environmental values and depth come from section 3.")
+           "from the .hdr). Environmental values and depth come from section 3. The instrument values (images per "
+           "trigger, position and width of the stream of particles, cut images, humidity) come from the .adc and .hdr.")
 if meta_rows is None and (meta_dir / metadata.OUTPUT_CSV).is_file():
     meta_rows = pd.read_csv(meta_dir / metadata.OUTPUT_CSV, dtype=str, keep_default_na=False).to_dict("records")
 bins = complete_bins(str(folder))
 todo = sorted(set(bins) - known_stats(folder))
 if todo and not st.session_state.get(f"count_{folder}"):
-    st.info(f"The images of {len(todo)} bin(s) are not counted yet. The feature extraction (section 2) counts them; "
-            "for bins extracted before, this button reads their .adc files once (up to an hour or more for a whole "
-            "cruise on a slow network drive), then they are kept in `log/bin_stats.csv`.")
+    st.info(f"The images of {len(todo)} bin(s) are not counted yet, or were counted before the instrument values "
+            "were added. The feature extraction (section 2) counts them; for bins extracted before, this button reads "
+            "their .adc files once (up to an hour or more for a whole cruise on a slow network drive), then they are "
+            "kept in `log/bin_stats.csv`.")
     if st.button("Count the images", type="primary"):
         st.session_state[f"count_{folder}"] = True
         st.rerun()
@@ -464,24 +465,30 @@ elif bins:
                    "before the EcoTaxa tables.")
         st.dataframe(pd.DataFrame(bin_problems).drop(columns="spreadsheet row"), width="stretch", hide_index=True)
     flagged = flagged | {p["bin"] for p in bin_problems if p["check"] != "Gap in the sampling"}
-    df, variables, depth = qc.frame(stats, meta_rows, flagged)
+    df, variables, depth = qc.frame(stats, meta_rows, meta_problems + bin_problems)
     figures = qc.charts(df, variables, depth)
+    st.caption("In each figure, only the bins flagged for a reason shown by that figure are coloured, and the legend "
+               "names the reason (e.g. *Few images* in the concentration, *Out of range* in the salinity). Hover a "
+               "point: *to check* lists every reason of the bin, also those of other figures. Bin-name typos and bins "
+               "without metadata are in the tables only.")
 
     if "qc_map.png" in figures:
         st.subheader("Map")
-        pos = df.dropna(subset=["object_lat", "object_lon"])
-        st.map(pos.assign(color=[qc.TO_CHECK if s == "to check" else qc.SERIES for s in pos["status"]]),
+        pos = df.assign(why=qc.why(df, qc.MAP)).dropna(subset=["object_lat", "object_lon"])
+        st.map(pos.assign(color=[qc.SERIES if w == "ok" else qc.TO_CHECK for w in pos["why"]]),
                latitude="object_lat", longitude="object_lon", color="color", size=400)
-        st.caption(f"{len(pos)} bin{'s' if len(pos) > 1 else ''} with a position · blue: no problem · orange: a point to check in section 3")
+        st.caption(f"{len(pos)} bin{'s' if len(pos) > 1 else ''} with a position · blue: no problem · orange: a position "
+                   "to check (position jump, latitude or longitude out of range), see the figure below")
+        st.altair_chart(figures["qc_map.png"][1], width="stretch")
     st.subheader("Against time and depth")
     st.caption("One row per variable: against the time the IFCB analysed the bin (left) and against depth (right). "
                "Hover a point to see its bin. Drag to pan, scroll to zoom.")
-    for c, title in variables:
+    for c, title, by_depth in variables:
         left, right = st.columns(2)
         left.altair_chart(figures[f"qc_{c}_time.png"][1], width="stretch")
-        if depth:
+        if depth and by_depth:
             right.altair_chart(figures[f"qc_{c}_depth.png"][1], width="stretch")
-    if len(variables) == 1:
+    if not any(c.startswith("sample_") for c, _, _ in variables):
         st.caption("Salinity, temperature, chlorophyll a… appear here once they are chosen in section 3.")
     with st.expander("Table of the values plotted"):
         st.dataframe(df, width="stretch", hide_index=True)
@@ -493,6 +500,26 @@ elif bins:
                    f"{saved_figures['saved'].replace('T', ' ')}).")
     except Exception as e:  # e.g. vl-convert not installed yet: the page still works
         st.caption(f":orange[The figures could not be saved in figures/: {e}]")
+
+    st.subheader("Position of the images in the camera field")
+    st.caption("ROI x against ROI y of every image of a bin, as the RoiXY graph of IFCBacquire and the plot of the "
+               "IFCB dashboard. The images should form one compact band: spread out, or moved, they point to a bad "
+               "flow (blocked needle, pump). A point is the top left corner of an image; orange: the image touches the left or right edge, so it is cut (a long image starting in the middle can reach the right edge). The bins flagged "
+               "*Stream shifted*, *Stream wide* or *Many cut images* come first.")
+    flow = {p["bin"]: p["check"] for p in bin_problems if p["check"] in ("Stream shifted", "Stream wide", "Many cut images")}
+    choices = sorted(flow) + [b for b in bins if b not in flow]
+    roi_bin = st.selectbox("Bin", choices, key=f"roi_bin_{folder}",
+                           format_func=lambda b: b + (f"  ({flow[b]})" if b in flow else ""))
+    frame_right = max(s.get("right_edge", 0) for s in stats.values())
+    with st.spinner("Reading the .adc file…"):
+        rois = project.roi_positions(str(folder), roi_bin)
+    if rois:
+        st.altair_chart(qc.roi_chart(rois, frame_right).interactive(), width="stretch")
+        s = stats[roi_bin]
+        st.caption(f"{len(rois)} images · stream centred at y = {s.get('stream_y_median', float('nan')):.0f} px, "
+                   f"{s.get('stream_y_spread', float('nan')):.0f} px wide (10 to 90 %) · "
+                   f"{df.set_index('bin').at[roi_bin, 'cut_percent'] or 0:.1f} % of the images touch the edge "
+                   f"(camera field {frame_right:.0f} px wide, the largest x + width of the cruise)")
 
 st.subheader("Images and their blobs")
 st.caption("The blob is the outline WHOI ifcb-features found in the image: the features are measured on it. Check that "

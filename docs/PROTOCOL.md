@@ -176,9 +176,16 @@ Rules applied to every cruise:
 
 - Click **Count the images** if the page asks (only for bins extracted before the counts existed; slow on the
   network drive).
-- Look at the lists: **Few images** and **Small volume analysed** (failed acquisitions?), **Gap in the sampling**.
-- Look at the map and the figures (concentration in images mL⁻¹ and every numeric field, against time and
-  depth). Orange points have a point to check. A point far from the others is often a typo.
+- Look at the list of the bins to look at (the checks are in section 6 below).
+- Look at the map and the figures: concentration in images mL⁻¹ and every numeric field against time and depth,
+  then the instrument values against time (images per trigger, position and width of the stream of particles, images
+  cut at the edge of the camera field, humidity). **In each figure, only the bins flagged for a reason that figure
+  shows are coloured, and the legend names the reason** (e.g. *Few images* in the concentration, *Out of range* in the
+  salinity, *Position jump* on the map). Hover a point: *to check* lists every reason of the bin. A point far from
+  the others is often a typo.
+- Look at **Position of the images in the camera field** (ROI x against ROI y of one bin; the flagged bins first):
+  the images should form one compact band. Spread out or moved, the flow is bad (blocked needle, pump); orange images
+  touch the left or right edge and are cut.
 - Look at **Images and their blobs**: the blob should cover the particle, not the background or a bubble.
 - The figures are saved in `figures/` automatically.
 
@@ -304,7 +311,20 @@ python make_figures.py Y:\ifcb_sn225_jc278_pap2025new
 
 - Saves the map and the figures as PNG in `figures/`, and the bins that look failed and the gaps in the sampling in
   `log/bins_check_<date>.txt`; prints the list.
-- Uses the image counts made by the feature extraction; bins not counted yet are counted first (slow on Y:\).
+- Uses the image counts made by the feature extraction; bins not counted yet are counted first (slow on Y:\). Bins
+  counted before the instrument values existed are read once more.
+- As in the app, each figure colours only the bins flagged for a reason it shows, with the reason in the legend (the
+  metadata points come from the last `log/metadata_check_<date>.txt`).
+
+### Position of the images in the camera field
+
+```bash
+python show_positions.py Y:\ifcb_sn225_jc278_pap2025new
+python show_positions.py Y:\ifcb_sn225_jc278_pap2025new D20250810T164958_IFCB225 D20250811
+```
+
+- ROI x against ROI y of every image of a bin, in `figures/positions_<bin>.png`. Without a bin: the bins flagged
+  *Stream shifted*, *Stream wide* or *Many cut images*.
 
 ### Images and their blobs
 
@@ -367,8 +387,23 @@ python -c "import ecotaxa; p='Y:/'; print(ecotaxa.compare_report({n: ecotaxa.tab
 | 4 | Few images (< 10 % of the cruise median) | A failed acquisition |
 | 4 | Small volume analysed (< 50 % of the median) | A run stopped early |
 | 4 | Gap in the sampling | Instrument stopped, or bins missing from `raw/` |
+| 4 | Short run (< 1000 s and < 2.5 mL) | An incomplete sample |
+| 4 | Few images per trigger (< 0.9) | Triggers without an image: images lost |
+| 4 | High humidity (above the alarm threshold of the `.hdr`, 90 %) | Water inside the IFCB |
+| 4 | Stream shifted (median ROI y > 50 px, or 4 × the usual spread, from the cruise median) | Flow deviated |
+| 4 | Stream wide (ROI y 10–90 % range > 1.5 × the cruise median) | Bad flow: blocked needle, pump |
+| 4 | Many cut images (> 5 % and > 3 × the cruise median touch the left or right edge) | Flow near the edge, or long chains |
 | 4 | Blob not on the particle | Segmentation problem: check focus and the image |
 | Compare | Columns or types differ between cruises | Tables made with different tools or versions |
+
+The instrument checks follow what IFCB users already look at: the RoiXY graph of the acquisition software
+IFCBacquire and its "Bad flow, ROIs appear spread out over large area" issue in the
+[IFCB field guide](https://github.com/mrun0205/IFCB_FieldGuide) (sections 6 and 8); the ROI x / ROI y plot shown by
+default for each bin by the [WHOI IFCB dashboard](https://github.com/WHOIGit/ifcbdb); the
+[QC script of the California IFCB network](https://github.com/NTrautman/IFCB) (ROIy against ROIx per sample, images
+per trigger < 0.9, run < 1000 s and < 2.5 mL, humidity). [iRfcb](https://github.com/EuropeanIFCBGroup/iRfcb)
+(`ifcb_qc_sample`) and [ifcbkit](https://github.com/WHOIGit/ifcbkit) ≥ 0.4 (`ifcbkit.qc`) check the integrity of the
+files.
 
 ---
 

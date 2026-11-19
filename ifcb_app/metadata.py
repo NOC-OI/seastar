@@ -254,6 +254,19 @@ def write_report(log_dir, problems, n_bins, source_file, name="metadata_check"):
     return path
 
 
+def read_report(path):
+    """The problems of a report written by write_report (for the figures of make_figures.py)."""
+    problems = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) == 4 and parts[2].startswith("row "):
+                row = parts[2][4:]
+                problems.append({"check": parts[0], "bin": "" if parts[1] == "-" else parts[1],
+                                 "spreadsheet row": "" if row == "-" else row, "detail": parts[3]})
+    return problems
+
+
 def write(metadata_dir, columns, out, mapping, source_file, bin_column):
     """metadata_ecotaxa.csv, and metadata_ecotaxa.json with the column types (for SeaSTAR's --bindcol) and the
     choices made, so that the page can show them again."""

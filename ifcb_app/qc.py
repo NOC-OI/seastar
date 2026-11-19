@@ -7,13 +7,54 @@ from pathlib import Path
 import pandas as pd
 
 import metadata
+import project
 
-SERIES, TO_CHECK = "#2a78d6", "#eb6834"  # blue: bins; orange: bins with a point to check
+SERIES = "#2a78d6"  # blue: bins without a point to check in this figure
+# One colour per reason shown in a figure (orange first): the legend names the reason.
+REASON_COLOURS = ["#eb6834", "#b8326b", "#7a4fc4", "#9a7b00", "#1c8a7a", "#5a6b74"]
+TO_CHECK = REASON_COLOURS[0]
+
+# Instrument values of each bin, plotted against time only.
+INSTRUMENT = [("images_per_trigger", "Images per trigger"),
+              ("stream_y_median", "Stream position: median ROI y (pixels)"),
+              ("stream_y_spread", "Stream width: ROI y from 10 to 90 % (pixels)"),
+              ("cut_percent", "Images touching the edge of the camera field (%)"),
+              ("humidity", "Humidity inside the IFCB (%)")]
+MAP = "map"
+# A point is the top left corner of an image: a long image starting in the middle can reach the right edge.
+EDGE = "touches the edge (x = 0, or x + width = right edge)"
 
 
-def frame(stats, meta_rows, flagged):
-    """(table of the bins with their counts, metadata and status, [(column, title)] to plot, depth column or None)."""
-    df = pd.DataFrame([{"bin": b, "time": metadata.bin_time(b), **s} for b, s in stats.items()])
+def reasons_by_figure(problems):
+    """{figure key: {bin: "reason; reason"}}: a bin is coloured only in the figures that show why it is flagged.
+    Figure keys: a column plotted (e.g. rois_per_ml, sample_salinity_pss) or MAP. Problems without a figure (bin-name
+    typos, bins without metadata…) are only in the tables."""
+    columns_of = {f["field"]: f["ecotaxa_columns"].split(";") for f in metadata.load_fields()}
+    out = {}
+    for p in problems:
+        if not p.get("bin"):
+            continue
+        keys = []
+        if p["check"] in project.BIN_CHECKS:
+            keys = [project.BIN_CHECKS[p["check"]]]
+        elif p["check"] == "Position jump":
+            keys = [MAP]
+        elif p["check"] in ("Out of range", "Not a number"):
+            columns = columns_of.get(p["detail"].split(" = ")[0], [])
+            keys = [MAP if c in ("object_lat", "object_lon") else c for c in columns]
+        for k in keys:
+            reasons = out.setdefault(k, {}).setdefault(p["bin"], [])
+            if p["check"] not in reasons:
+                reasons.append(p["check"])
+    return {k: {b: "; ".join(r) for b, r in v.items()} for k, v in out.items()}
+
+
+def frame(stats, meta_rows, problems):
+    """(table of the bins with their values and reasons, [(column, title, against depth too)], depth column or None).
+    problems: those of metadata.build and project.check_bins."""
+    cut = project.cut_percent(stats)
+    df = pd.DataFrame([{"bin": b, "time": metadata.bin_time(b), **s, "cut_percent": cut.get(b)}
+                       for b, s in stats.items()])
     fields = metadata.load_fields()
     labels = {c: f"{f['field']} ({f['unit']})" if f["unit"] else f["field"]
               for f in fields for c in f["ecotaxa_columns"].split(";")}
@@ -23,43 +64,86 @@ def frame(stats, meta_rows, flagged):
         keep = [c for c in meta.columns if c in numeric]
         meta[keep] = meta[keep].apply(pd.to_numeric, errors="coerce")
         df = df.merge(meta[["bin"] + keep], on="bin", how="left")
-    df["status"] = ["to check" if b in flagged else "ok" for b in df["bin"]]
+    every = {}
+    for p in problems:
+        if p.get("bin"):
+            every.setdefault(p["bin"], []).append(f"{p['check']}: {p['detail']}")
+    df["to check"] = [" | ".join(every.get(b, [])) for b in df["bin"]]
+    for key, by_bin in reasons_by_figure(problems).items():
+        df[f"why {key}"] = [by_bin.get(b, "") for b in df["bin"]]
     depth = "sample_depth_min" if "sample_depth_min" in df.columns and df["sample_depth_min"].notna().any() else None
-    variables = [("rois_per_ml", "Particle concentration (images mL-1)")] + [
-        (c, labels[c]) for c in df.columns if c in numeric and c.startswith("sample_") and "depth" not in c
-        and df[c].notna().any()]
+    variables = [("rois_per_ml", "Particle concentration (images mL-1)", True)] + [
+        (c, labels[c], True) for c in df.columns if c in numeric and c.startswith("sample_") and "depth" not in c
+        and df[c].notna().any()] + [(c, t, False) for c, t in INSTRUMENT if c in df.columns and df[c].notna().any()]
     return df, variables, depth
 
 
+def why(df, *keys):
+    """The reasons of each bin for the figures `keys` (e.g. the variable and the depth), "ok" when none."""
+    cols = [f"why {k}" for k in keys if k and f"why {k}" in df.columns]
+    if not cols:
+        return pd.Series("ok", index=df.index)
+    joined = df[cols].apply(lambda r: "; ".join(dict.fromkeys(x for v in r for x in v.split("; ") if x)), axis=1)
+    return joined.replace("", "ok")
+
+
+def colour(values):
+    """Altair colour: blue for ok, one colour per reason, legend titled "To check"."""
+    import altair as alt
+    reasons = sorted(set(values) - {"ok"})
+    rng = [SERIES] + [REASON_COLOURS[i % len(REASON_COLOURS)] for i in range(len(reasons))]
+    return alt.Color("why:N", scale=alt.Scale(domain=["ok"] + reasons, range=rng),
+                     legend=alt.Legend(title="To check", orient="top", labelLimit=400) if reasons else None)
+
+
 def charts(df, variables, depth):
-    """{file name in figures/: (title, Altair chart)}: the map, then each variable against time and depth."""
+    """{file name in figures/: (title, Altair chart)}: the map, then each variable against time (and depth)."""
     import altair as alt
     tooltip = ["bin", alt.Tooltip("time:T", format="%Y-%m-%d %H:%M"), alt.Tooltip("rois_per_ml:Q", format=".0f"),
-               "rois", alt.Tooltip("ml_analyzed:Q", format=".2f"), "status"]
-    color = alt.Color("status:N", scale=alt.Scale(domain=["ok", "to check"], range=[SERIES, TO_CHECK]),
-                      legend=alt.Legend(title=None, orient="top"))
+               "rois", alt.Tooltip("ml_analyzed:Q", format=".2f"), "to check"]
 
-    def scatter(x, y, x_title, y_title, reverse_y=False):
-        x_axis = (alt.X(x, title=x_title, axis=alt.Axis(format="%d %b %H:%M", labelAngle=-30)) if x.endswith(":T")
-                  else alt.X(x, title=x_title, scale=alt.Scale(zero=False)))
-        return (alt.Chart(df).mark_circle(size=60, opacity=0.8).encode(
-            x=x_axis, y=alt.Y(y, title=y_title, scale=alt.Scale(reverse=reverse_y, zero=False)),
-            color=color, tooltip=tooltip + [c for c in (y.split(":")[0], x.split(":")[0]) if c not in ("time", "rois_per_ml")])
+    def data(*keys):
+        w = why(df, *keys)
+        return df.assign(why=w, flagged=(w != "ok").astype(int))  # flagged points drawn on top
+
+    def scatter(d, x, y, x_title, y_title, reverse_y=False):
+        x_axis = (alt.X(x, title=x_title, axis=alt.Axis(format="%d %b %H:%M", labelAngle=-30), scale=alt.Scale(padding=12))
+                  if x.endswith(":T") else alt.X(x, title=x_title, scale=alt.Scale(zero=False, padding=12)))
+        extra = [c for c in (y.split(":")[0], x.split(":")[0]) if c not in ("time", "rois_per_ml")]
+        return (alt.Chart(d).mark_circle(size=60, opacity=0.8).encode(
+            x=x_axis, y=alt.Y(y, title=y_title, scale=alt.Scale(reverse=reverse_y, zero=False, padding=12)),
+            color=colour(d["why"]), order=alt.Order("flagged:Q"), tooltip=tooltip + extra)
             .properties(height=260).interactive())
 
     figures = {}
     if {"object_lat", "object_lon"} <= set(df.columns) and df["object_lat"].notna().any():
-        pos = df.dropna(subset=["object_lat", "object_lon"])
+        pos = data(MAP).dropna(subset=["object_lat", "object_lon"])
         figures["qc_map.png"] = ("Sample positions (longitude, latitude)", alt.Chart(pos).mark_circle(size=60, opacity=0.8).encode(
-            x=alt.X("object_lon:Q", title="Longitude (degrees E)", scale=alt.Scale(zero=False)),
-            y=alt.Y("object_lat:Q", title="Latitude (degrees N)", scale=alt.Scale(zero=False)),
-            color=color, tooltip=tooltip).properties(height=450))
-    for c, title in variables:
-        figures[f"qc_{c}_time.png"] = (f"{title} against time", scatter("time:T", f"{c}:Q", "Time (UTC)", title))
-        if depth:
-            figures[f"qc_{c}_depth.png"] = (f"{title} against depth",
-                                            scatter(f"{c}:Q", f"{depth}:Q", title, "Depth (m)", reverse_y=True))
+            x=alt.X("object_lon:Q", title="Longitude (degrees E)", scale=alt.Scale(zero=False, padding=12)),
+            y=alt.Y("object_lat:Q", title="Latitude (degrees N)", scale=alt.Scale(zero=False, padding=12)),
+            color=colour(pos["why"]), order=alt.Order("flagged:Q"), tooltip=tooltip).properties(height=450))
+    for c, title, by_depth in variables:
+        figures[f"qc_{c}_time.png"] = (f"{title} against time", scatter(data(c), "time:T", f"{c}:Q", "Time (UTC)", title))
+        if depth and by_depth:
+            figures[f"qc_{c}_depth.png"] = (f"{title} against depth", scatter(
+                data(c, depth), f"{c}:Q", f"{depth}:Q", title, "Depth (m)", reverse_y=True))
     return figures
+
+
+def roi_chart(rois, frame_right):
+    """ROI x against ROI y of the images of one bin, as the RoiXY graph of IFCBacquire and the plot of the IFCB
+    dashboard: the images should form one compact band; spread out, they point to a bad flow. Images touching the
+    left or right edge of the camera field (cut images) are coloured."""
+    import altair as alt
+    df = pd.DataFrame(rois)
+    df["where"] = [EDGE if r.x <= 0 or r.x + r.width >= frame_right else "inside" for r in df.itertuples()]
+    return alt.Chart(df).mark_circle(size=14, opacity=0.5).encode(
+        x=alt.X("x:Q", title="ROI x (pixels)", scale=alt.Scale(domain=[0, frame_right])),
+        y=alt.Y("y:Q", title="ROI y (pixels)", scale=alt.Scale(zero=True)),
+        color=alt.Color("where:N", scale=alt.Scale(domain=["inside", EDGE], range=[SERIES, TO_CHECK]),
+                        legend=alt.Legend(title=None, orient="top", labelLimit=500)),
+        order=alt.Order("where:N"),
+        tooltip=["roi", "x", "y", "width", "height", "where"]).properties(height=320)
 
 
 def save(folder, figures, df, force=False):

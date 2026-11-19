@@ -36,13 +36,19 @@ def test_create_and_scan():
         assert chosen == [] and len(unknown) == 2 and "closest: D20260802T010203_IFCB225" in unknown[0], unknown
 
         with open(os.path.join(day, "D20260802T010203_IFCB225.hdr"), "w") as f:
-            f.write("softwareVersion: 1.0\nrunTime: 1260\ninhibitTime: 60\n")
+            f.write("softwareVersion: 1.0\nrunTime: 1260\ninhibitTime: 60\ntriggerCount: 3\nhumidity: 95.5\n"
+                    "HumidityAlarmThreshold(%): 90\n")
         with open(os.path.join(day, "D20260802T010203_IFCB225.adc"), "w") as f:  # 2 images, 1 trigger without image
-            f.write("\n".join(",".join(["1"] * 13 + [x, x, w, w] + ["0"] * 7) for x, w in
-                              (("1", "10"), ("1", "0"), ("2", "12"))))
+            f.write("\n".join(",".join(["1"] * 13 + [x, y, w, w] + ["0"] * 7) for x, y, w in
+                              (("0", "5", "10"), ("1", "1", "0"), ("2", "9", "12"))))
         stats = project.bin_stats(root, ["D20260802T010203_IFCB225"])["D20260802T010203_IFCB225"]
-        assert stats == {"rois": 2, "ml_analyzed": 5.0, "rois_per_ml": 0.4}, stats  # 0.25 mL/min x 20 min
+        expected = {"rois": 2, "ml_analyzed": 5.0, "rois_per_ml": 0.4,  # 0.25 mL/min x 20 min
+                    "triggers": 3, "images_per_trigger": 0.667, "run_time": 1260, "humidity": 95.5, "humidity_alarm": 90,
+                    "stream_y_median": 7, "cut_left": 1, "right_edge": 14, "cut_right": 1}
+        assert {k: stats[k] for k in expected} == expected, stats
         assert os.path.isfile(os.path.join(root, "log", project.STATS_CSV))
+        assert project.load_stats(root)["D20260802T010203_IFCB225"] == stats  # saved and read back
+        assert [r["x"] for r in project.roi_positions(root, "D20260802T010203_IFCB225")] == [0, 2]
 
         from datetime import datetime
         t = lambda b: datetime.strptime(b.split("_")[0], "D%Y%m%dT%H%M%S")
@@ -54,6 +60,27 @@ def test_create_and_scan():
         assert checks == {("Few images", "D20260802T030000_IFCB225"),
                           ("Small volume analysed", "D20260802T030000_IFCB225"),
                           ("Gap in the sampling", "D20260802T230000_IFCB225")}, checks
+
+        ok = {"rois": 3000, "ml_analyzed": 4.5, "rois_per_ml": 666, "triggers": 2950, "images_per_trigger": 1.02,
+              "run_time": 1200, "humidity": 22, "humidity_alarm": 90, "stream_y_median": 560, "stream_y_spread": 440,
+              "cut_left": 6, "right_edge": 1358, "cut_right": 9}
+        cruise = {f"D20260802T{h:02d}0000_IFCB225": dict(ok, stream_y_median=550 + h) for h in range(0, 8)}
+        bad = {"D20260802T010000_IFCB225": {"images_per_trigger": 0.8},
+               "D20260802T020000_IFCB225": {"humidity": 93},
+               "D20260802T030000_IFCB225": {"stream_y_median": 700},
+               "D20260802T040000_IFCB225": {"stream_y_spread": 800},
+               "D20260802T050000_IFCB225": {"cut_right": 400},
+               "D20260802T060000_IFCB225": {"run_time": 600, "ml_analyzed": 2.0}}
+        for b, change in bad.items():
+            cruise[b].update(change)
+        found = {(p["bin"], p["check"]) for p in project.check_bins(cruise, t)}
+        assert found == {("D20260802T010000_IFCB225", "Few images per trigger"),
+                         ("D20260802T020000_IFCB225", "High humidity"),
+                         ("D20260802T030000_IFCB225", "Stream shifted"),
+                         ("D20260802T040000_IFCB225", "Stream wide"),
+                         ("D20260802T050000_IFCB225", "Many cut images"),
+                         ("D20260802T060000_IFCB225", "Short run"),
+                         ("D20260802T060000_IFCB225", "Small volume analysed")}, found
 
         s = project.scan_project(root)
         assert s["days"]["D20260802"] == {"bins": 2, "complete_bins": 1, "features": 1, "ecotaxa_zips": 0}

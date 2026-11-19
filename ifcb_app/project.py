@@ -136,13 +136,17 @@ def bins_without_features(root):
 
 FLOW_ML_PER_MIN = 0.25  # IFCB sample flow rate, as in WHOI's ml_analyzed
 STATS_CSV = "bin_stats.csv"
+# Per bin, from the .hdr and .adc. stream_*: ROI y (pixels) of the images, median and 10-90 % range; cut_left: images
+# starting at x = 0; right_edge / cut_right: the largest x + width of the bin and how many images reach it.
+STATS_FIELDS = ["rois", "ml_analyzed", "rois_per_ml", "triggers", "images_per_trigger", "run_time", "humidity",
+                "humidity_alarm", "stream_y_median", "stream_y_spread", "cut_left", "right_edge", "cut_right"]
 
 
 def bin_stats(root, bins):
-    """{bin: {"rois": images, "ml_analyzed": mL, "rois_per_ml": concentration}} from the .adc and .hdr files.
-    Kept in log/bin_stats.csv: each bin is read once, the raw files of a bin do not change."""
+    """{bin: STATS_FIELDS values} from the .adc and .hdr files. Kept in log/bin_stats.csv: each bin is read once
+    (again only if it was counted before a field was added), the raw files of a bin do not change."""
     stats = load_stats(root)
-    new = [b for b in bins if b not in stats]
+    new = [b for b in bins if not stats_complete(stats.get(b))]
     raw = raw_bin_paths(root, new)
     for b in new:
         stats[b] = read_bin_stats(raw[b], b)
@@ -151,15 +155,39 @@ def bin_stats(root, bins):
     return {b: stats[b] for b in bins}
 
 
+def stats_complete(s):
+    return bool(s) and all(k in s for k in STATS_FIELDS)
+
+
 def read_bin_stats(path, bin_name):
-    """Images, mL analysed and concentration of one bin; path = the bin's files without extension."""
+    """STATS_FIELDS of one bin; path = the bin's files without extension."""
+    import statistics
     from ifcbkit.adc import parse_adc_file
     from ifcbkit.header import parse_hdr
     with open(path + ".hdr", encoding="utf-8", errors="replace") as f:
         hdr = parse_hdr(f.read().splitlines())
-    ml = FLOW_ML_PER_MIN * (float(hdr.get("runTime", 0)) - float(hdr.get("inhibitTime", 0))) / 60
-    n = len(parse_adc_file(bin_name, path + ".adc"))
-    return {"rois": n, "ml_analyzed": round(ml, 4), "rois_per_ml": round(n / ml, 2) if ml > 0 else float("nan")}
+
+    def number(key, default=float("nan")):
+        try:
+            return float(hdr.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    run_time = number("runTime", 0)
+    ml = FLOW_ML_PER_MIN * (run_time - number("inhibitTime", 0)) / 60
+    rois = [r for r in parse_adc_file(bin_name, path + ".adc", extended=True).values() if r["width"] > 0]
+    n = len(rois)
+    triggers = number("triggerCount")
+    ys = sorted(r["y"] for r in rois)
+    right = max((r["x"] + r["width"] for r in rois), default=0)
+    q = lambda p: ys[min(len(ys) - 1, int(p * len(ys)))] if ys else float("nan")
+    return {"rois": n, "ml_analyzed": round(ml, 4), "rois_per_ml": round(n / ml, 2) if ml > 0 else float("nan"),
+            "triggers": triggers, "images_per_trigger": round(n / triggers, 3) if triggers > 0 else float("nan"),
+            "run_time": round(run_time, 1), "humidity": round(number("humidity"), 2),
+            "humidity_alarm": number("HumidityAlarmThreshold(%)", 90.0),
+            "stream_y_median": statistics.median(ys) if ys else float("nan"), "stream_y_spread": q(0.9) - q(0.1),
+            "cut_left": sum(1 for r in rois if r["x"] <= 0), "right_edge": right,
+            "cut_right": sum(1 for r in rois if r["x"] + r["width"] >= right)}
 
 
 def load_stats(root):
@@ -168,7 +196,7 @@ def load_stats(root):
     if os.path.isfile(path):
         with open(path, newline="", encoding="utf-8") as f:
             for r in csv.DictReader(f):
-                stats[r["bin"]] = {k: float(r[k]) for k in ("rois", "ml_analyzed", "rois_per_ml")}
+                stats[r["bin"]] = {k: float(v) for k, v in r.items() if k != "bin" and v not in ("", None)}
     return stats
 
 
@@ -178,34 +206,92 @@ def save_stats(root, stats):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["bin", "rois", "ml_analyzed", "rois_per_ml"])
-        w.writerows([b, s["rois"], s["ml_analyzed"], s["rois_per_ml"]] for b, s in sorted(stats.items()))
+        w.writerow(["bin"] + STATS_FIELDS)
+        w.writerows([b] + [s.get(k, "") for k in STATS_FIELDS] for b, s in sorted(stats.items()))
+
+
+def cut_percent(stats):
+    """{bin: % of its images touching the left or right edge of the camera field}. The field width is the largest
+    x + width of the cruise (it is not in the .hdr), so the right edge counts only for bins that reach it."""
+    frame = max((s.get("right_edge", 0) for s in stats.values()), default=0)
+    out = {}
+    for b, s in stats.items():
+        if "cut_left" in s and s.get("rois"):
+            cut = s["cut_left"] + (s["cut_right"] if s["right_edge"] >= frame else 0)
+            out[b] = round(100 * cut / s["rois"], 2)
+    return out
+
+
+# Which figure shows each check of the bins: qc.py colours a bin only in the figures of its reasons.
+BIN_CHECKS = {"Few images": "rois_per_ml", "Small volume analysed": "rois_per_ml", "Short run": "rois_per_ml",
+              "Gap in the sampling": "rois_per_ml", "Few images per trigger": "images_per_trigger",
+              "High humidity": "humidity", "Stream shifted": "stream_y_median", "Stream wide": "stream_y_spread",
+              "Many cut images": "cut_percent"}
 
 
 def check_bins(stats, bin_time):
     """Bins that look failed, and gaps in the sampling, compared with the rest of the cruise.
     stats: {bin: bin_stats values}; bin_time: bin name -> datetime. Returns problems like metadata.build."""
+    import math
     import statistics
     problems = []
+
+    def add(check, b, detail):
+        problems.append({"check": check, "bin": b, "spreadsheet row": "", "detail": detail})
+
     if len(stats) < 3:
         return problems
-    rois = statistics.median(s["rois"] for s in stats.values())
-    ml = statistics.median(s["ml_analyzed"] for s in stats.values())
+
+    def known(k):
+        return [s[k] for s in stats.values() if not math.isnan(s.get(k, float("nan")))]
+
+    def median(k):
+        return statistics.median(known(k)) if known(k) else float("nan")
+
+    rois, ml = median("rois"), median("ml_analyzed")
+    y_med, spread = median("stream_y_median"), median("stream_y_spread")
+    y_dev = statistics.median(abs(v - y_med) for v in known("stream_y_median")) if known("stream_y_median") else 0
+    cut = cut_percent(stats)
+    cut_med = statistics.median(cut.values()) if cut else 0
     for b, s in sorted(stats.items()):
+        def v(k):
+            return s.get(k, float("nan"))
         if s["rois"] < 0.1 * rois:
-            problems.append({"check": "Few images", "bin": b, "spreadsheet row": "",
-                             "detail": f"{s['rois']:.0f} images, the cruise median is {rois:.0f}: failed acquisition?"})
+            add("Few images", b, f"{s['rois']:.0f} images, the cruise median is {rois:.0f}: failed acquisition?")
         if s["ml_analyzed"] < 0.5 * ml:
-            problems.append({"check": "Small volume analysed", "bin": b, "spreadsheet row": "",
-                             "detail": f"{s['ml_analyzed']:.2f} mL, the cruise median is {ml:.2f} mL: run stopped early?"})
+            add("Small volume analysed", b,
+                f"{s['ml_analyzed']:.2f} mL, the cruise median is {ml:.2f} mL: run stopped early?")
+        if v("run_time") < 1000 and s["ml_analyzed"] < 2.5:  # thresholds of the California IFCB network QC
+            add("Short run", b, f"{v('run_time'):.0f} s and {s['ml_analyzed']:.2f} mL: incomplete sample?")
+        if v("images_per_trigger") < 0.9:  # California IFCB network QC: images lost
+            add("Few images per trigger", b, f"{s['rois']:.0f} images for {v('triggers'):.0f} triggers "
+                f"({v('images_per_trigger'):.2f}): triggers without an image")
+        if v("humidity") > v("humidity_alarm"):
+            add("High humidity", b, f"{v('humidity'):.1f} % inside the IFCB, alarm above {v('humidity_alarm'):.0f} %")
+        if abs(v("stream_y_median") - y_med) > max(50, 4 * y_dev):
+            add("Stream shifted", b, f"images centred at y = {v('stream_y_median'):.0f} px, the cruise median is "
+                f"{y_med:.0f} px: flow deviated?")
+        if v("stream_y_spread") > 1.5 * spread:
+            add("Stream wide", b, f"images spread over {v('stream_y_spread'):.0f} px in y, the cruise median is "
+                f"{spread:.0f} px: bad flow?")
+        if cut.get(b, 0) > max(5, 3 * cut_med):
+            add("Many cut images", b, f"{cut[b]:.1f} % of the images touch the edge of the camera field, the cruise "
+                f"median is {cut_med:.1f} %")
     times = sorted((bin_time(b), b) for b in stats)
     steps = [(t2 - t1).total_seconds() for (t1, _), (t2, _) in zip(times, times[1:])]
     gap = max(3600, 3 * statistics.median(steps))  # shortcut: one threshold for the cruise, not per station
     for ((t1, b1), (t2, b2)), s in zip(zip(times, times[1:]), steps):
         if s > gap:
-            problems.append({"check": "Gap in the sampling", "bin": b2, "spreadsheet row": "",
-                             "detail": f"{s / 3600:.1f} h without a bin since {b1}"})
+            add("Gap in the sampling", b2, f"{s / 3600:.1f} h without a bin since {b1}")
     return problems
+
+
+def roi_positions(root, bin_name):
+    """[{roi, x, y, width, height}] of the images of a bin, from its .adc (ROI x, y: top left corner, pixels)."""
+    from ifcbkit.adc import parse_adc_file
+    path = raw_bin_paths(root, [bin_name])[bin_name]
+    return [{"roi": t, "x": r["x"], "y": r["y"], "width": r["width"], "height": r["height"]}
+            for t, r in sorted(parse_adc_file(bin_name, path + ".adc", extended=True).items()) if r["width"] > 0]
 
 
 def blob_zip(root, bin_name):
