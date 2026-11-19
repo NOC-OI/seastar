@@ -103,7 +103,7 @@ def bin_choice(folder, key, n_new, new_label):
     """Which bins to run (steps 3 and 5): (None, n_new) for the bins not done yet (`new_label`), or (the days and
     bins picked, their number of bins) for --bins: those are done again even if already done."""
     mode = st.radio("Bins", ["new", "chosen"], horizontal=True, key=f"{key}_mode_{folder}", label_visibility="collapsed",
-                    format_func=lambda m: f"{new_label} ({n_new})" if m == "new" else "Chosen days or bins, done again")
+                    format_func=lambda m: f"{new_label} ({n_new} to do)" if m == "new" else "Chosen days or bins, done again")
     if mode == "new":
         return None, n_new
     bins = complete_bins(str(folder))
