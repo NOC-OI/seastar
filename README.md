@@ -64,15 +64,17 @@ ifcb_sn<serial>_<cruise ID>_<name>/          e.g. ifcb_sn225_ce26008_ar7e
     ecotaxa_import_zip_seastar/
 ```
 
-| Step (app section) | What it does | Status |
+| Step | What it does | Status |
 |---|---|---|
-| 1 · Choose the IFCB project | Opens a project with **Browse…** or creates one with the right folder names. Shows, per day, the number of bins, complete bins (hdr + adc + roi), feature files and EcoTaxa zips, and highlights the days where they differ. | Done |
-| 2 · Extract the features | [WHOI ifcb-features](https://github.com/WHOIGit/ifcb-features) v1.3.1 (August 2026): the 30 features of the WHOI MATLAB code and the blob masks. Runs in the background on several cores, skips the bins already done (or does again the days and bins you choose), shows the progress and the time left. The WHOI version (tag and commit) is recorded for each bin and goes to EcoTaxa as `process_feature_extractor` and `process_feature_extractor_release`. | Done |
-| 3 · Sample metadata | Reads the spreadsheet of the samples (CSV or Excel) chosen with **Browse…**. For each EcoTaxa column of a shared list (latitude, longitude, depth, Niskin date and time, salinity, temperature, chlorophyll a, Niskin and CTD numbers, comment), you choose the spreadsheet column it comes from, or a value used when the spreadsheet has none (depth 5 m). Columns missing from the list can be added, and they stay available for the next projects, so every cruise gets the same column names. Depth goes to `sample_depth_*` and `object_depth_*`; dates and times are always text. Writes `metadata/metadata_ecotaxa.csv`, one row per bin, Before that, it lists what to correct in the spreadsheet: probable typos in bin names (with the bin of `raw/` they most likely are), bins without metadata, values that are not numbers or outside the expected range, position jumps no ship could make, Niskin times after the IFCB analysis. The list is also saved in `log/metadata_check_<date>.txt`. | Done |
-| 4 · Quality check figures | Map of the samples, and particle concentration (images per mL analysed, from the `.adc` and `.hdr` files) against time and depth, with every environmental variable of the spreadsheet (salinity, temperature, chlorophyll a…). Plots the instrument values against time: images per trigger, position and width of the stream of particles in the camera field, images cut at its edge, humidity. Lists the bins that look failed (few images, small volume, short run, few images per trigger, high humidity, stream shifted or wide, many cut images) and the gaps in the sampling. In each figure, only the bins flagged for a reason that figure shows are coloured, and the legend names the reason. Shows the position of the images of a bin in the camera field (ROI x against ROI y, as the IFCB dashboard). The image counts are made during the feature extraction. Shows 12 images of a bin above their blob, to check the segmentation. The figures are saved as PNG in `figures/`, again only when the data change. Comes before the EcoTaxa tables so that problems are corrected first. | Done |
-| 5 · EcoTaxa tables | One zip per bin (`<CRUISE NAME>_<bin>.zip`, as for CE26008), made by `seastar ifcb_to_ecotaxa` in the background with the images, the features, the metadata of step 3 and the feature extractor version (`process_feature_extractor`, `process_feature_extractor_release`). Operator, checker, project, ship and cruise are typed once and remembered. A box, checked by default, adds the blob of each image as a second image of the object (`img_rank` 1). Bins that already have their zip are skipped, or you choose days and bins to make again. Each feature file is checked first (one row per image), because SeaSTAR would make a zip without features ([issue #19](https://github.com/NOC-OI/seastar/issues/19)). Still to add: a check of the column names and types of every table before the upload. | Done |
+| 1 · Project | Opens a project with **Browse…** or creates one with the right folder names. Shows where each step stands, and, per day, the number of bins, complete bins (hdr + adc + roi), feature files and EcoTaxa zips, highlighting the days where they differ. | Done |
+| 2 · Raw data check | Before the features, from the `.adc` and `.hdr` files only: images and volume analysed of each bin, particle concentration, and the instrument (images per trigger, position and width of the stream of particles in the camera field, images cut at its edge, humidity), against time. Lists the bins that look failed (few images, small volume, short run, few images per trigger, high humidity, stream shifted or wide, many cut images) and the gaps in the sampling, so that failed acquisitions are moved out before spending time on their features. Shows the position of the images of a bin in the camera field (ROI x against ROI y, as the IFCB dashboard). | Done |
+| 3 · Features | [WHOI ifcb-features](https://github.com/WHOIGit/ifcb-features) v1.3.1 (August 2026): the 30 features of the WHOI MATLAB code and the blob masks. Runs in the background on several cores, skips the bins already done (or does again the days and bins you choose), shows the progress and the time left. The WHOI version (tag and commit) is recorded for each bin and goes to EcoTaxa as `process_feature_extractor` and `process_feature_extractor_release`. Then shows 12 images of a bin above their blob, to check the segmentation. | Done |
+| 4 · Sample metadata | Reads the spreadsheet of the samples (CSV or Excel) chosen with **Browse…**. For each EcoTaxa column of a shared list (latitude, longitude, depth, Niskin date and time, salinity, temperature, chlorophyll a, Niskin and CTD numbers, comment), you choose the spreadsheet column it comes from, or a value used when the spreadsheet has none (depth 5 m). Columns missing from the list can be added, and they stay available for the next projects, so every cruise gets the same column names. Depth goes to `sample_depth_*` and `object_depth_*`; dates and times are always text. Lists what to correct in the spreadsheet: probable typos in bin names (with the bin of `raw/` they most likely are), bins without metadata, values that are not numbers or outside the expected range, position jumps no ship could make, Niskin times after the IFCB analysis. **Save the metadata for the EcoTaxa tables** writes `metadata/metadata_ecotaxa.csv` and `log/metadata_check_<date>.txt`. Then the map and every environmental value against time and depth. | Done |
+| 5 · EcoTaxa tables | First what is still to check (warnings and flagged bins of steps 2 and 4). Then one zip per bin (`<CRUISE NAME>_<bin>.zip`, as for CE26008), made by `seastar ifcb_to_ecotaxa` in the background with the images, the features, the metadata of step 4 and the feature extractor version. Operator, checker, project, ship and cruise are typed once and remembered. A box, checked by default, adds the blob of each image as a second image of the object (`img_rank` 1). Bins that already have their zip are skipped, or you choose days and bins to make again. Each feature file is checked first (one row per image), because SeaSTAR would make a zip without features ([issue #19](https://github.com/NOC-OI/seastar/issues/19)). Still to add: a check of the column names and types of every table before the upload. | Done |
 
-A second page, **Compare EcoTaxa tables**, compares the tables of several projects (row 1, the column names; row 2, the types `[f]`/`[t]`) and gives the differences as a text report you can download. It reads only the first two rows of each table and is run only when you ask.
+In every figure of steps 2 and 4, only the bins flagged for a reason that figure shows are coloured, and the legend names the reason. The figures are saved as PNG in `figures/`.
+
+**Compare EcoTaxa tables** compares the tables of several projects (row 1, the column names; row 2, the types `[f]`/`[t]`) and gives the differences as a text report you can download. It reads only the first two rows of each table and is run only when you ask.
 
 The step-by-step protocol, for the app and for the command line, with diagrams of what the pipeline does: [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
@@ -91,12 +93,12 @@ Then, for a cruise, in this order (`<project>` is the project folder, e.g. `Y:\i
 |---|---|---|
 | 1 · Create the project | `python create_project.py <parent folder> --serial 225 --cruise-id ce26008 --name ar7e` | On an existing project, adds only its missing folders. Then copy the IFCB day folders (`DYYYYMMDD`) into `raw/` |
 | Before each step | `python project_status.py <project>` | Bins, features and zips per day, and the warnings: incomplete bins, bins without features, no metadata, points to check, failed runs, WHOI version |
-| 2 · Features | `python extract_features.py <project> --workers 8` | Skips the bins already done, so it can be run again after a stop. `--bins BIN_OR_DAY …`: only those bins (or days), done again |
-| 3 · Metadata: check | `python make_metadata.py <project> <spreadsheet> --check-only` | Prints the column used for each field and what to correct; writes nothing. Correct the spreadsheet and run it again |
-| 3 · Metadata: write | `python make_metadata.py <project> <spreadsheet>` | `--map FIELD=COLUMN`, `--default FIELD=VALUE`, `--add-field oxygen:sample_oxygen:f:umol/kg:0:500`, `--sheet NAME`, `--bin-column COLUMN` |
-| 4 · Quality check | `python make_figures.py <project>` | Figures in `figures/`, failed bins and gaps in `log/bins_check_<date>.txt` |
-| 4 · Blobs | `python show_blobs.py <project> [<bin>]` | `--seed N` for other images, `--n 18` for more |
-| 4 · Image positions | `python show_positions.py <project> [<bin or day> ...]` | ROI x against ROI y of a bin; without a bin, the bins flagged for the flow or cut images |
+| 2 · Raw data check | `python make_figures.py <project>` | Before the features: failed bins and gaps in `log/bins_check_<date>.txt`, figures in `figures/`. Run it again after step 4 for the map and the environmental values |
+| 2 · Image positions | `python show_positions.py <project> [<bin or day> ...]` | ROI x against ROI y of a bin; without a bin, the bins flagged for the flow or cut images |
+| 3 · Features | `python extract_features.py <project> --workers 8` | Skips the bins already done, so it can be run again after a stop. `--bins BIN_OR_DAY …`: only those bins (or days), done again |
+| 3 · Blobs | `python show_blobs.py <project> [<bin>]` | `--seed N` for other images, `--n 18` for more |
+| 4 · Metadata: check | `python make_metadata.py <project> <spreadsheet> --check-only` | Prints the column used for each field and what to correct; writes nothing. Correct the spreadsheet and run it again |
+| 4 · Metadata: write | `python make_metadata.py <project> <spreadsheet>` | `--map FIELD=COLUMN`, `--default FIELD=VALUE`, `--add-field oxygen:sample_oxygen:f:umol/kg:0:500`, `--sheet NAME`, `--bin-column COLUMN` |
 | 5 · EcoTaxa tables | `python make_ecotaxa.py <project> --operator "Full Name" --blobs` | `--qcdby`, `--project-name`, `--ship`, `--cruise`, `--workers`; without `--blobs`, no blobs. `--bins BIN_OR_DAY …`: only those bins (or days), made again; a failure keeps the old zip |
 | Blobs for zips made by `seastar ifcb_to_ecotaxa` | `python ecotaxa.py --blobs <project> <zip> [<zip> ...]` | Running it twice adds nothing |
 
@@ -106,7 +108,7 @@ Every script has `--help`. The protocol gives examples and what each check means
 
 <img src="docs/ifcb_app_icon.png" alt="IFCB pipeline app icon: the IFCB instrument, an arrow, and a grid of plankton vignettes" width="128" align="right">
 
-The same five steps as numbered sections of one page, with **Browse…** buttons for the folders and the spreadsheet, progress bars, the figures and the images shown on the page.
+The same five steps, one page each, in the menu on the left: group **Process** (steps 1 to 5 and Compare EcoTaxa tables), then **EcoTaxa API** and **BODC** (to come). The icon of each step tells where it stands for the project chosen: ✅ done, ⚠️ something to look at, ⬜ to do, 🔄 running. **Browse…** buttons for the folders and the spreadsheet, progress bars, the figures and the images shown on the page.
 
 On Windows:
 
@@ -123,15 +125,17 @@ The feature extraction and the EcoTaxa tables started from the app run as their 
 
 | File | Role |
 |---|---|
-| `create_project.py`, `project_status.py`, `extract_features.py`, `make_metadata.py`, `make_figures.py`, `show_blobs.py`, `make_ecotaxa.py` | The command line, one script per step (table above). The app starts `extract_features.py` and `make_ecotaxa.py` itself |
-| `app.py` | Starts the app and its two pages (menu on the left) |
-| `process.py` | Page 1, **Process a project**: steps 1 to 5 |
-| `compare.py` | Page 2, **Compare EcoTaxa tables**: a text report comparing the column names and types of the EcoTaxa tables of several projects, run when you click Compare |
-| `ui.py` | Pieces shared by the two pages (folder field with **Browse…**) |
+| `create_project.py`, `project_status.py`, `make_figures.py`, `show_positions.py`, `extract_features.py`, `show_blobs.py`, `make_metadata.py`, `make_ecotaxa.py` | The command line, one script per step (table above). The app starts `extract_features.py` and `make_ecotaxa.py` itself |
+| `app.py` | Starts the app: the menu on the left, in three groups, and the icon of each step |
+| `steps/step1_project.py` … `steps/step5_ecotaxa.py` | The pages of steps 1 to 5 |
+| `steps/ecotaxa_api.py`, `steps/bodc.py` | The EcoTaxa API and BODC pages (to come) |
+| `common.py` | Pieces shared by the pages of the steps: the project chosen, the background runs, where each step stands |
+| `compare.py` | Page **Compare EcoTaxa tables**: a text report comparing the column names and types of the EcoTaxa tables of several projects, run when you click Compare |
+| `ui.py` | The folder field with **Browse…**, shared by the pages |
 | `project.py` | Naming, creating and scanning a project folder (no interface code) |
 | `metadata.py` | Builds `metadata_ecotaxa.csv` from the spreadsheet and the chosen columns, and the checks (no interface code) |
 | `metadata_columns.csv` | The shared list of metadata fields: EcoTaxa column(s), type `f`/`t`, unit, value if empty, expected range. Columns added from the page are written here |
-| `qc.py` | The quality check figures, used by the page and by `make_figures.py` (no interface code) |
+| `qc.py` | The quality check figures, used by the pages of steps 2 and 4 and by `make_figures.py` (no interface code) |
 | `whoi/extract_slim_features.py` | Copied unchanged from WHOI ifcb-features v1.3.1 (MIT licence, `whoi/LICENSE`): this script is not part of the pip package |
 | `ecotaxa.py` | Adds the blobs to the EcoTaxa zips made by SeaSTAR, as `img_rank` 1 rows (used by `make_ecotaxa.py --blobs`, or alone: table above) |
 | `test_project.py`, `test_metadata.py`, `test_ecotaxa.py` | Tests: `python test_project.py`, `python test_metadata.py`, `python test_ecotaxa.py` |

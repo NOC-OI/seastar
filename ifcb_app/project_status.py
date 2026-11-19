@@ -1,4 +1,4 @@
-"""Where a project stands (section 1 of the app) and what the app would warn about. Writes nothing.
+"""Where a project stands (step 1 of the app) and what the app would warn about. Writes nothing.
 
     python project_status.py <project folder>
 

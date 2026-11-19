@@ -1,4 +1,4 @@
-"""Position of the images of a bin in the camera field (ROI x against ROI y), as a PNG (section 4 of the app).
+"""Position of the images of a bin in the camera field (ROI x against ROI y), as a PNG (step 2 of the app).
 
     python show_positions.py <project folder> [<bin> ...]
 

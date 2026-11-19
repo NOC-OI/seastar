@@ -1,4 +1,4 @@
-"""Create an IFCB project with the NOC folder layout (section 1 of the app).
+"""Create an IFCB project with the NOC folder layout (step 1 of the app).
 
     python create_project.py <parent folder> --serial 225 --cruise-id ce26008 --name ar7e
 

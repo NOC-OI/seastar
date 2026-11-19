@@ -1,4 +1,4 @@
-"""Images of a bin above their WHOI blobs, as one PNG (what section 4 of the app shows).
+"""Images of a bin above their WHOI blobs, as one PNG (what step 3 of the app shows).
 
     python show_blobs.py <project folder> [<bin>] [--n 12] [--seed 0]
 

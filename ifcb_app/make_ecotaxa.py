@@ -3,7 +3,7 @@
     python make_ecotaxa.py <project folder> --operator "Full Name" [--qcdby "Full Name"] [--project-name NAME]
                            [--ship SHIP] [--cruise CRUISE] [--blobs] [--workers N] [--bins BIN_OR_DAY ...]
 
-Each zip has the images, the WHOI features, the metadata of section 3 (metadata/metadata_ecotaxa.csv) and the
+Each zip has the images, the WHOI features, the metadata of step 4 (metadata/metadata_ecotaxa.csv) and the
 feature extractor version; with --blobs, the blob of each image as a second image (img_rank 1).
 Bins that already have their zip are skipped. With --bins, only those bins (or all the bins of a day, e.g.
 D20260729) are made, even if they have their zip: the new zip replaces the old one once complete. Zips: ecotaxa_import_zip_seastar/<CRUISE NAME>_<bin>.zip.

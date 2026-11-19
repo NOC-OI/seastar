@@ -1,4 +1,4 @@
-"""Quality check figures of a project (no UI code here): used by the page (section 4) and by make_figures.py."""
+"""Quality check figures of a project (no UI code here): used by the pages of steps 2 and 4 and by make_figures.py."""
 import hashlib
 import json
 from datetime import datetime
