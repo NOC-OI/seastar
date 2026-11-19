@@ -58,8 +58,15 @@ def main():
             json.dump(status, f)
         os.replace(tmp, status_path)  # the app never reads a half-written file
 
+    def say(text):  # the log file and the screen
+        log.write(text)
+        print(text, end="", flush=True)
+
+    warnings = project.warnings(root, "features")  # before save(): it reads the status of the last run
     save()
-    log.write(f"WHOI ifcb-features {version}, {len(todo)} bins to process with {args.workers} workers\n")
+    for w in warnings:
+        say(f"WARNING: {w}\n")
+    say(f"WHOI ifcb-features {version}, {len(todo)} bins to process with {args.workers} workers\n")
     t0 = time.time()
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(extract_one, raw_dir, out_dir, b, raw_paths[b]): b for b in todo}
@@ -68,10 +75,10 @@ def main():
             try:
                 stats[b] = fut.result()
                 project.record_extractor_version(out_dir, b, version)
-                log.write(f"[{status['done'] + 1}/{len(todo)}] {b} ok\n")
+                say(f"[{status['done'] + 1}/{len(todo)}] {b} ok\n")
             except Exception as e:
                 status["errors"].append(f"{b}: {e}")
-                log.write(f"[{status['done'] + 1}/{len(todo)}] {b} ERROR {e}\n")
+                say(f"[{status['done'] + 1}/{len(todo)}] {b} ERROR {e}\n")
             status["done"] += 1
             log.flush()
             save()
@@ -80,7 +87,9 @@ def main():
     project.save_stats(root, stats)
     status["finished"] = datetime.now().isoformat(timespec="seconds")
     save()
-    log.write(f"Finished in {time.time() - t0:.0f} s, {len(status['errors'])} errors\n")
+    say(f"Finished in {time.time() - t0:.0f} s, {len(status['errors'])} errors\n")
+    for e in status["errors"]:
+        say(f"  failed: {e}\n")
     log.close()
 
 

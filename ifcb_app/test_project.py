@@ -53,6 +53,33 @@ def test_create_and_scan():
             pass
 
 
+def test_warnings():
+    import json
+    project.latest_whoi_release = lambda: ("v1.4.0", "2027-01-01")  # no network in tests
+    project.whoi_version = lambda: "v1.3.1 (commit 1d0687e)"
+    with tempfile.TemporaryDirectory() as tmp:
+        root = project.create_project(tmp, "ifcb_sn225_ce26008_ar7e")
+        assert project.warnings(root, "all")[0].startswith("No IFCB bin")
+        day = os.path.join(root, "raw", "D20260802")
+        os.makedirs(day)
+        for ext in (".hdr", ".adc", ".roi"):
+            open(os.path.join(day, "D20260802T010203_IFCB225" + ext), "w").close()
+        open(os.path.join(day, "D20260802T020000_IFCB225.roi"), "w").close()
+        with open(os.path.join(root, "log", "features_status.json"), "w") as f:
+            json.dump({"whoi_version": "v1.3.0", "done": 3, "total": 9, "errors": [], "finished": None}, f)
+        w = project.warnings(root, "features")
+        assert "D20260802T020000_IFCB225 (no .hdr, .adc)" in w[0], w
+        assert any("not the one of the last extraction" in x for x in w) and any("v1.4.0" in x for x in w)
+        assert any("did not finish (3 / 9 bins)" in x for x in w)
+        w = project.warnings(root, "ecotaxa")
+        assert any("1 bin(s) without features" in x for x in w) and any("No metadata file" in x for x in w)
+        assert any("No metadata check yet" in x for x in w), w
+        with open(os.path.join(root, "log", "bins_check_20261119_100000.txt"), "w") as f:
+            f.write("Bins check\nFrom: x\n9 bins, 0 point(s) to check\n")
+        assert not any("bins check" in x for x in project.warnings(root, "ecotaxa"))
+
+
 if __name__ == "__main__":
     test_create_and_scan()
+    test_warnings()
     print("ok")

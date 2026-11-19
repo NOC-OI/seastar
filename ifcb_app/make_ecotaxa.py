@@ -120,8 +120,15 @@ def main():
             json.dump(status, f)
         os.replace(tmp, status_path)
 
+    def say(text):  # the log file and the screen
+        log.write(text)
+        print(text, end="", flush=True)
+
+    warnings = project.warnings(root, "ecotaxa")  # before save(): it reads the status of the last run
     save()
-    log.write(f"SeaSTAR EcoTaxa zips, {len(todo)} bins, {args.workers} at a time, blobs: {args.blobs}, "
+    for w in warnings:
+        say(f"WARNING: {w}\n")
+    say(f"SeaSTAR EcoTaxa zips, {len(todo)} bins, {args.workers} at a time, blobs: {args.blobs}, "
               f"metadata columns: {len(bindcols)}\n")
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=args.workers) as pool:  # threads: the work is in the SeaSTAR processes
@@ -129,16 +136,18 @@ def main():
         for fut in as_completed(futures):
             b = futures[fut]
             try:
-                log.write(f"[{status['done'] + 1}/{len(todo)}] {b} ok, {fut.result()}\n")
+                say(f"[{status['done'] + 1}/{len(todo)}] {b} ok, {fut.result()}\n")
             except Exception as e:
                 status["errors"].append(f"{b}: {e}")
-                log.write(f"[{status['done'] + 1}/{len(todo)}] {b} ERROR {e}\n")
+                say(f"[{status['done'] + 1}/{len(todo)}] {b} ERROR {e}\n")
             status["done"] += 1
             log.flush()
             save()
     status["finished"] = datetime.now().isoformat(timespec="seconds")
     save()
-    log.write(f"Finished in {time.time() - t0:.0f} s, {len(status['errors'])} errors\n")
+    say(f"Finished in {time.time() - t0:.0f} s, {len(status['errors'])} errors\n")
+    for e in status["errors"]:
+        say(f"  failed: {e}\n")
     log.close()
 
 

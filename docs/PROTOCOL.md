@@ -222,6 +222,8 @@ keeps it as a `.txt` file. Run it before importing a new cruise, to see whether 
 
 ```mermaid
 flowchart LR
+    N["python create_project.py &lt;parent&gt;<br/>--serial --cruise-id --name"] --> A
+    S["python project_status.py &lt;project&gt;<br/>(before each step)"] -.-> A
     A["Project folder<br/>with raw/"] --> B["python extract_features.py<br/>&lt;project&gt; --workers N"]
     B --> C["python make_metadata.py<br/>&lt;project&gt; &lt;spreadsheet&gt;"]
     C --> Q["python make_figures.py<br/>&lt;project&gt;"]
@@ -230,6 +232,30 @@ flowchart LR
     F["Zips made earlier with<br/>seastar ifcb_to_ecotaxa"] --> G["python ecotaxa.py --blobs<br/>&lt;project&gt; &lt;zips&gt;"]
 ```
 
+### Create the project
+
+```bash
+python create_project.py Y:\ --serial 225 --cruise-id jc278 --name pap2025new
+```
+
+- Creates `Y:\ifcb_sn225_jc278_pap2025new\` with the standard folders (section 2). If the project already exists, only
+  its missing folders are created; nothing already there is changed.
+- Then copy the day folders (`DYYYYMMDD`) of the IFCB into `raw/`.
+
+### Where the project stands
+
+```bash
+python project_status.py Y:\ifcb_sn225_jc278_pap2025new
+```
+
+- Writes nothing. Prints, per day, the bins in `raw/`, the complete bins (`.hdr` + `.adc` + `.roi`), the feature
+  files and the EcoTaxa zips; days where they differ are marked with `<` (the table of step 1 in the app).
+- Then the same warnings as the app: bins missing a file (they are left out), bins without features, no metadata
+  file, points still to check in the last metadata and bins checks, last runs that failed or stopped, a WHOI
+  version different from the last extraction or a newer WHOI release. Run it before each step.
+- `extract_features.py` and `make_ecotaxa.py` print the warnings of their step before they start, then one line per
+  bin, then the failed bins.
+
 ### Features
 
 ```bash
@@ -237,7 +263,7 @@ python extract_features.py Y:\ifcb_sn225_jc278_pap2025new --workers 14
 ```
 
 - Skips the bins that already have a feature file; safe to run again after a stop.
-- Progress: `log/features_status.json`, details: `log/features_<date>.log`.
+- Prints one line per bin and the failed bins at the end; the same lines go to `log/features_<date>.log`.
 
 ### Sample metadata
 
@@ -296,7 +322,7 @@ python make_ecotaxa.py Y:\ifcb_sn225_jc278_pap2025new ^
 
 - Without `--blobs`, the zips have no blobs.
 - Skips the bins that already have their zip; a failed bin leaves no zip.
-- Progress: `log/ecotaxa_status.json`, details: `log/ecotaxa_<date>.log`.
+- Prints one line per bin and the failed bins at the end; the same lines go to `log/ecotaxa_<date>.log`.
 
 ### Blobs for zips made with SeaSTAR directly
 
@@ -318,7 +344,8 @@ python -c "import ecotaxa; p='Y:/'; print(ecotaxa.compare_report({n: ecotaxa.tab
 
 | Where | Check | Usual cause |
 |---|---|---|
-| 1 | Bins ≠ complete bins | A file missing in `raw/` |
+| 1, `project_status.py` | Bins ≠ complete bins | A file missing in `raw/` |
+| 1, 5, `project_status.py` | Bins without features / without zip | A step not run yet, or bins that failed |
 | 3 | Bin name typo? | A digit typed wrong or two digits swapped in the spreadsheet |
 | 3 | Position jump (> 20 knots) | A lat/lon typo, or Niskin samples analysed in batches without their Niskin time |
 | 3 | Out of range | A typo (salinity 350 for 35.0), or a unit error |

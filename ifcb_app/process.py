@@ -176,7 +176,7 @@ def start_extraction(root, workers):
     err = open(root / "log" / "features_errors_python.log", "a", encoding="utf-8")
     # Its own process: it goes on if the browser tab is closed (not if this computer sleeps)
     subprocess.Popen([sys.executable, str(REPO / "extract_features.py"), str(root), "--workers", str(workers)],
-                     cwd=REPO, stdout=err, stderr=err, creationflags=NO_WINDOW)
+                     cwd=REPO, stdout=subprocess.DEVNULL, stderr=err, creationflags=NO_WINDOW)  # stdout: the log has it
     st.session_state["extraction_started"] = True
 
 
@@ -507,7 +507,7 @@ def start_ecotaxa(root, settings):
     if settings["blobs"]:
         cmd.append("--blobs")
     err = open(root / "log" / "ecotaxa_errors_python.log", "a", encoding="utf-8")
-    subprocess.Popen(cmd, cwd=REPO, stdout=err, stderr=err, creationflags=NO_WINDOW)
+    subprocess.Popen(cmd, cwd=REPO, stdout=subprocess.DEVNULL, stderr=err, creationflags=NO_WINDOW)  # stdout: the log has it
     st.session_state["ecotaxa_started"] = True
 
 

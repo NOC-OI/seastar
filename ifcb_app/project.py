@@ -284,3 +284,74 @@ def scan_project(root):
     metadata = sorted(os.path.relpath(f, meta_dir).replace("\\", "/") for f in _files(meta_dir) if f.lower().endswith(".csv"))
     info = scan_name(root)
     return {"root": root, "name_info": info, "present": present, "days": dict(sorted(days.items())), "metadata": metadata}
+
+
+# ---------------------------------------------------------------- warnings, for the command line
+def last_run(root, job):
+    """log/<job>_status.json (job: features or ecotaxa), or None if never run."""
+    try:
+        with open(os.path.join(root, "log", f"{job}_status.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def last_report(root, name):
+    """(path, summary line) of the newest log/<name>_<date>.txt (metadata_check or bins_check), or None."""
+    log_dir = os.path.join(root, "log")
+    files = sorted(f for f in os.listdir(log_dir) if f.startswith(name + "_") and f.endswith(".txt")) \
+        if os.path.isdir(log_dir) else []
+    if not files:
+        return None
+    path = os.path.join(log_dir, files[-1])
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    return path, lines[2] if len(lines) > 2 else ""
+
+
+def _some(bins, n=5):
+    return ", ".join(bins[:n]) + (f" … (+{len(bins) - n})" if len(bins) > n else "")
+
+
+def warnings(root, step):
+    """What the app warns about before a step, as lines of text: step "features", "ecotaxa" or "all"."""
+    out = []
+    bins = raw_bins(root)
+    incomplete = sorted(b for b, exts in bins.items() if len(exts) < 3)
+    if not bins:
+        return [f"No IFCB bin in {os.path.join(root, 'raw')}: copy the day folders (DYYYYMMDD) of the IFCB into raw/."]
+    if incomplete:
+        out.append(f"{len(incomplete)} bin(s) miss a file (.hdr, .adc or .roi) and are left out: " + _some(
+            [f"{b} (no {', '.join(e for e in ('.hdr', '.adc', '.roi') if e not in bins[b])})" for b in incomplete]))
+    if step in ("features", "all"):
+        installed, last = whoi_version(), last_run(root, "features")
+        if not installed:
+            out.append("WHOI ifcb-features is not installed: pip install -r requirements.txt")
+        elif last and last.get("whoi_version") and last["whoi_version"] != installed:
+            out.append(f"The installed WHOI ifcb-features ({installed}) is not the one of the last extraction "
+                       f"({last['whoi_version']}): the project would mix two versions.")
+        latest = latest_whoi_release()
+        if installed and latest and not installed.startswith(latest[0]):
+            out.append(f"WHOI published ifcb-features {latest[0]} on {latest[1]}; installed: {installed}.")
+    for job, what in (("features", "feature extraction"), ("ecotaxa", "EcoTaxa run")):
+        last = last_run(root, job)
+        if step in (job, "all") and last:
+            if not last.get("finished"):
+                out.append(f"The last {what} did not finish ({last['done']} / {last['total']} bins), "
+                           "or is still running.")
+            elif last.get("errors"):
+                out.append(f"The last {what} had {len(last['errors'])} failed bin(s): " + _some(last["errors"], 3))
+    if step in ("ecotaxa", "all"):
+        without = bins_without_features(root)
+        if without:
+            out.append(f"{len(without)} bin(s) without features are left out of the EcoTaxa tables: run "
+                       "extract_features.py first. " + _some(without))
+        if not os.path.isfile(os.path.join(root, "metadata", "metadata_ecotaxa.csv")):
+            out.append("No metadata file yet (make_metadata.py): the zips would have no sample metadata.")
+        for name, script in (("metadata_check", "make_metadata.py"), ("bins_check", "make_figures.py")):
+            report = last_report(root, name)
+            if report is None:
+                out.append(f"No {name.replace('_', ' ')} yet: run {script}.")
+            elif not report[1].endswith(", 0 point(s) to check"):
+                out.append(f"Last {name.replace('_', ' ')}: {report[1]}, see {report[0]}. Correct them first if you can.")
+    return out
