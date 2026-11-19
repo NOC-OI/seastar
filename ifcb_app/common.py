@@ -31,6 +31,7 @@ bins_with_blobs = st.cache_data(ttl=600, show_spinner="Listing the blobs…")(pr
 
 
 def rescan():
+    st.session_state["rescanned"] = True  # app.py shows a message once the project is read again
     scan_project.clear()
     bins_without_features.clear()
     complete_bins.clear()

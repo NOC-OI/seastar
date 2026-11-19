@@ -22,6 +22,8 @@ for key in ("project", "parent", "mode", "serial", "cruise_id", "cruise_name", "
 # The icon of each step tells where it stands for the project chosen (✅ done, ⚠️ to look at, ☐ to do, 🔄 running).
 folder = common.chosen_project()
 states = common.progress(folder) if folder else {}
+if st.session_state.pop("rescanned", False) and 1 in states:
+    st.toast(f"Project read again · {states[1][1]}", icon="🔄")
 steps = [st.Page(REPO / common.STEP_PAGES[n], title=title, default=n == 1,
                  icon=common.ICONS[states[n][0]] if n in states else None)
          for n, title in common.STEP_TITLES.items()]
