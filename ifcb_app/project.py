@@ -355,3 +355,19 @@ def warnings(root, step):
             elif not report[1].endswith(", 0 point(s) to check"):
                 out.append(f"Last {name.replace('_', ' ')}: {report[1]}, see {report[0]}. Correct them first if you can.")
     return out
+
+
+def select_bins(root, names):
+    """The complete bins of raw/ named in `names` (bin names, or days DYYYYMMDD for all the bins of a day), sorted,
+    and the names that match none, each with the closest bins."""
+    import difflib
+    bins = complete_bins(root)
+    chosen, unknown = set(), []
+    for n in (n.strip() for n in names):
+        hit = [b for b in bins if b == n or (DAY_RE.fullmatch(n) and b.startswith(n + "T"))]
+        if hit:
+            chosen.update(hit)
+        else:
+            close = difflib.get_close_matches(n, bins, 3, 0.6)
+            unknown.append(f"{n} (closest: {', '.join(close) or 'none'})")
+    return sorted(chosen), unknown

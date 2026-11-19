@@ -91,12 +91,12 @@ Then, for a cruise, in this order (`<project>` is the project folder, e.g. `Y:\i
 |---|---|---|
 | 1 · Create the project | `python create_project.py <parent folder> --serial 225 --cruise-id ce26008 --name ar7e` | On an existing project, adds only its missing folders. Then copy the IFCB day folders (`DYYYYMMDD`) into `raw/` |
 | Before each step | `python project_status.py <project>` | Bins, features and zips per day, and the warnings: incomplete bins, bins without features, no metadata, points to check, failed runs, WHOI version |
-| 2 · Features | `python extract_features.py <project> --workers 8` | Skips the bins already done, so it can be run again after a stop |
+| 2 · Features | `python extract_features.py <project> --workers 8` | Skips the bins already done, so it can be run again after a stop. `--bins BIN_OR_DAY …`: only those bins (or days), done again |
 | 3 · Metadata: check | `python make_metadata.py <project> <spreadsheet> --check-only` | Prints the column used for each field and what to correct; writes nothing. Correct the spreadsheet and run it again |
 | 3 · Metadata: write | `python make_metadata.py <project> <spreadsheet>` | `--map FIELD=COLUMN`, `--default FIELD=VALUE`, `--add-field oxygen:sample_oxygen:f:umol/kg:0:500`, `--sheet NAME`, `--bin-column COLUMN` |
 | 4 · Quality check | `python make_figures.py <project>` | Figures in `figures/`, failed bins and gaps in `log/bins_check_<date>.txt` |
 | 4 · Blobs | `python show_blobs.py <project> [<bin>]` | `--seed N` for other images, `--n 18` for more |
-| 5 · EcoTaxa tables | `python make_ecotaxa.py <project> --operator "Full Name" --blobs` | `--qcdby`, `--project-name`, `--ship`, `--cruise`, `--workers`; without `--blobs`, no blobs |
+| 5 · EcoTaxa tables | `python make_ecotaxa.py <project> --operator "Full Name" --blobs` | `--qcdby`, `--project-name`, `--ship`, `--cruise`, `--workers`; without `--blobs`, no blobs. `--bins BIN_OR_DAY …`: only those bins (or days), made again; a failure keeps the old zip |
 | Blobs for zips made by `seastar ifcb_to_ecotaxa` | `python ecotaxa.py --blobs <project> <zip> [<zip> ...]` | Running it twice adds nothing |
 
 Every script has `--help`. The protocol gives examples and what each check means: [docs/PROTOCOL.md](docs/PROTOCOL.md).

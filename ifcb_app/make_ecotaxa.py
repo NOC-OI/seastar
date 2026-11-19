@@ -1,17 +1,19 @@
 """EcoTaxa import zips of an IFCB project with SeaSTAR, one zip per bin, run in the background by the app.
 
     python make_ecotaxa.py <project folder> --operator "Full Name" [--qcdby "Full Name"] [--project-name NAME]
-                           [--ship SHIP] [--cruise CRUISE] [--blobs] [--workers N]
+                           [--ship SHIP] [--cruise CRUISE] [--blobs] [--workers N] [--bins BIN_OR_DAY ...]
 
 Each zip has the images, the WHOI features, the metadata of section 3 (metadata/metadata_ecotaxa.csv) and the
 feature extractor version; with --blobs, the blob of each image as a second image (img_rank 1).
-Bins that already have their zip are skipped. Zips: ecotaxa_import_zip_seastar/<CRUISE NAME>_<bin>.zip.
+Bins that already have their zip are skipped. With --bins, only those bins (or all the bins of a day, e.g.
+D20260729) are made, even if they have their zip: the new zip replaces the old one once complete. Zips: ecotaxa_import_zip_seastar/<CRUISE NAME>_<bin>.zip.
 Progress is written to log/ecotaxa_status.json (read by the app) and log/ecotaxa_<date>.log.
 """
 import argparse
 import csv
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -66,6 +68,7 @@ def make_one(root, bin_name, raw_path, args, bindcols):
     features_dir = os.path.join(root, project.FEATURES_DIR)
     out = zip_path(root, bin_name)
     with tempfile.TemporaryDirectory() as tmp:
+        new = os.path.join(tmp, os.path.basename(out))  # replaces `out` only once complete: a failed redo keeps the old zip
         inputs = [raw_path + ext for ext in (".hdr", ".adc", ".roi")]
         inputs.append(project.feature_file(features_dir, bin_name))
         for p in (one_row_csv(os.path.join(root, "metadata", metadata.OUTPUT_CSV), tmp, "metadata.csv", bin_name),
@@ -77,16 +80,16 @@ def make_one(root, bin_name, raw_path, args, bindcols):
                               ("--cruise", args.cruise)):
             if value:
                 cmd += [option, value]
-        cmd += ["--bindcol", "feature_extractor_release:t:process_feature_extractor_release", *bindcols, "-o", out]
+        cmd += ["--bindcol", "feature_extractor_release:t:process_feature_extractor_release", *bindcols, "-o", new]
         run = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    errors = [l for l in run.stdout.splitlines() if l.startswith("[ERR]")]
-    if run.returncode != 0 or not os.path.isfile(out):
-        last = (run.stderr.strip().splitlines() or run.stdout.strip().splitlines() or ["no message"])[-1]
-        if os.path.isfile(out):
-            os.remove(out)  # never leave half a zip: the bin is done again next time
-        raise RuntimeError(f"SeaSTAR failed: {last}")
-    blobs = ecotaxa.add_blobs(out, root) if args.blobs else 0
+        errors = [l for l in run.stdout.splitlines() if l.startswith("[ERR]")]
+        if run.returncode != 0 or not os.path.isfile(new):
+            last = (run.stderr.strip().splitlines() or run.stdout.strip().splitlines() or ["no message"])[-1]
+            raise RuntimeError(f"SeaSTAR failed: {last}")
+        blobs = ecotaxa.add_blobs(new, root) if args.blobs else 0
+        shutil.copyfile(new, out + ".part")  # never half a zip under its real name (copy: tmp and out may be on two drives)
+        os.replace(out + ".part", out)
     return f"{len(errors)} missing values" + (f", {blobs} blobs" if args.blobs else "")
 
 
@@ -100,12 +103,23 @@ def main():
     parser.add_argument("--cruise")
     parser.add_argument("--blobs", action="store_true", help="add the blob of each image as a second image (img_rank 1)")
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 2))
+    parser.add_argument("--bins", nargs="+", metavar="BIN_OR_DAY",
+                        help="only these bins (names, or days DYYYYMMDD), made again even if they have their zip")
     args = parser.parse_args()
 
     root = os.path.abspath(args.project)
     log_dir = os.path.join(root, "log")
+    skipped = []
+    if args.bins:
+        chosen, unknown = project.select_bins(root, args.bins)
+        if unknown:
+            sys.exit("Not a complete bin or day of raw/: " + "; ".join(unknown))
+        without = set(project.bins_without_features(root))
+        todo = [b for b in chosen if b not in without]
+        skipped = [b for b in chosen if b in without]
+    else:
+        todo, _, _ = plan(root)
     os.makedirs(os.path.join(root, ZIP_DIR), exist_ok=True)
-    todo, _, _ = plan(root)
     raw = project.raw_bin_paths(root, todo)
     columns = metadata.read_choices(os.path.join(root, "metadata")).get("columns", {})
     bindcols = metadata.bindcol_args(columns) if os.path.isfile(os.path.join(root, "metadata", metadata.OUTPUT_CSV)) else []
@@ -125,6 +139,8 @@ def main():
         print(text, end="", flush=True)
 
     warnings = project.warnings(root, "ecotaxa")  # before save(): it reads the status of the last run
+    if skipped:
+        warnings.append(f"Left out, no features yet (run extract_features.py --bins first): {', '.join(skipped)}")
     save()
     for w in warnings:
         say(f"WARNING: {w}\n")

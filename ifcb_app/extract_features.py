@@ -1,8 +1,9 @@
 """Feature extraction of an IFCB project with WHOI ifcb-features v1.3.1, run in the background by the app.
 
-    python extract_features.py <project folder> [--workers N]
+    python extract_features.py <project folder> [--workers N] [--bins BIN_OR_DAY ...]
 
-Bins that already have a feature file are skipped. Outputs, as WHOI's extract_features_batch.py:
+Bins that already have a feature file are skipped. With --bins, only those bins (or all the bins of a day,
+e.g. D20260729) are done, even if they have a feature file: its new version replaces it. Outputs, as WHOI's extract_features_batch.py:
     whoi_v4_V131_features/features/<day>/<bin>_features_v4.csv  (+ multiblob/)
     whoi_v4_V131_features/blobs/<day>/<bin>_blobs_v4.zip
     whoi_v4_V131_features/feature_extractor_versions.csv  (bin, extractor, release: joined by SeaSTAR per bin)
@@ -26,9 +27,11 @@ def extract_one(raw_dir, out_dir, bin_name, raw_path):
     from whoi.extract_slim_features import configure_output, extract_and_save_all_features
     configure_output(False)
     day = bin_name[:9]
+    feature_file = project.feature_file(out_dir, bin_name)
+    before = os.path.getmtime(feature_file) if os.path.isfile(feature_file) else None  # a bin done again (--bins)
     extract_and_save_all_features(raw_dir, os.path.join(out_dir, "features", day), bins=[bin_name],
                                   blobs_directory=os.path.join(out_dir, "blobs", day))
-    if not os.path.isfile(project.feature_file(out_dir, bin_name)):
+    if not os.path.isfile(feature_file) or os.path.getmtime(feature_file) == before:
         raise RuntimeError("no feature file written (bin unreadable or without images)")
     return project.read_bin_stats(raw_path, bin_name)  # images and mL analysed, for the QC figures
 
@@ -37,12 +40,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("project")
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
+    parser.add_argument("--bins", nargs="+", metavar="BIN_OR_DAY",
+                        help="only these bins (names, or days DYYYYMMDD), done again even if they have features")
     args = parser.parse_args()
 
     root = os.path.abspath(args.project)
     raw_dir, out_dir, log_dir = (os.path.join(root, d) for d in ("raw", project.FEATURES_DIR, "log"))
+    if args.bins:
+        todo, unknown = project.select_bins(root, args.bins)
+        if unknown:
+            sys.exit("Not a complete bin or day of raw/: " + "; ".join(unknown))
+    else:
+        todo = project.bins_without_features(root)
     os.makedirs(log_dir, exist_ok=True)
-    todo = project.bins_without_features(root)
     raw_paths = project.raw_bin_paths(root, todo)
     stats = project.load_stats(root)
     version = project.whoi_version()

@@ -20,6 +20,10 @@ def test_create_and_scan():
         os.makedirs(os.path.dirname(feat))
         open(feat, "w").close()
         assert project.bins_without_features(root) == []
+        assert project.select_bins(root, ["D20260802T010203_IFCB225"]) == (["D20260802T010203_IFCB225"], [])
+        assert project.select_bins(root, ["D20260802"]) == (["D20260802T010203_IFCB225"], [])  # a day: its complete bins
+        chosen, unknown = project.select_bins(root, ["D20260802T010204_IFCB225", "D20260802T020000_IFCB225"])
+        assert chosen == [] and len(unknown) == 2 and "closest: D20260802T010203_IFCB225" in unknown[0], unknown
 
         with open(os.path.join(day, "D20260802T010203_IFCB225.hdr"), "w") as f:
             f.write("softwareVersion: 1.0\nrunTime: 1260\ninhibitTime: 60\n")

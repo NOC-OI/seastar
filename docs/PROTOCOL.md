@@ -263,6 +263,9 @@ python extract_features.py Y:\ifcb_sn225_jc278_pap2025new --workers 14
 ```
 
 - Skips the bins that already have a feature file; safe to run again after a stop.
+- One bin or one day at a time: `--bins D20250810T164958_IFCB225 D20250811` does only those bins (a day = all its
+  bins), even if they already have features: the new files replace the old ones. A name that is not in `raw/` stops
+  the script before anything is done, with the closest bin names.
 - Prints one line per bin and the failed bins at the end; the same lines go to `log/features_<date>.log`.
 
 ### Sample metadata
@@ -322,6 +325,10 @@ python make_ecotaxa.py Y:\ifcb_sn225_jc278_pap2025new ^
 
 - Without `--blobs`, the zips have no blobs.
 - Skips the bins that already have their zip; a failed bin leaves no zip.
+- One bin or one day at a time: `--bins …`, as for the features. The bins are made again even if they have their
+  zip; the new zip replaces the old one only once it is complete, so a failure keeps the old zip. For example, after
+  correcting one row of the spreadsheet: `make_metadata.py` (all the project, a few seconds), then
+  `make_ecotaxa.py … --bins <that bin>`.
 - Prints one line per bin and the failed bins at the end; the same lines go to `log/ecotaxa_<date>.log`.
 
 ### Blobs for zips made with SeaSTAR directly
