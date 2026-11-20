@@ -8,7 +8,8 @@ import textwrap
 import datetime
 import glob
 
-version_string = "0.17"
+# Auto-generated at build time from build-install.sh
+from .version_string import version_string
 
 long_help_text = """
 seastar --gui                           Launch the SeaSTAR GUI
@@ -197,10 +198,11 @@ def base_cli():
             print(version_string)
         else:
             print("")
-            print("SeaSTAR v" + version_string)
+            print("SeaSTAR " + version_string)
             print("Sea-faring System for Tagging, Attribution and Redistribution")
             print("")
-            print("Author: Hannah Baldwin <hannah.baldwin@noc.ac.uk>")
+            print("Authors: Hannah Baldwin <hannah.baldwin@noc.ac.uk>")
+            print("         Amanda Elineau <amanda.elineau@noc.ac.uk>")
             print("")
             print("Copyright 2025-2026 National Oceanography Centre, United Kingdom")
             print("This program comes with ABSOLUTELY NO WARRANTY. This is free software,")
@@ -240,16 +242,15 @@ def base_cli():
                 text_wrapper = textwrap.TextWrapper(width=79-40-1)
 
                 for input_def_key in io_def["inputs"]:
-
                     input_def = io_def["inputs"][input_def_key]
-                    input_sig = "      "
-                    input_tail_lines = ""
+
                     semantic_type = "TEXT"
                     if "type" in input_def.keys():
                         if input_def["type"] == "BOOLEAN":
                             semantic_type = "SWITCH"
                     if "semantic_type" in input_def.keys():
                         semantic_type = input_def["semantic_type"]
+
                     input_sig_ed = "<text>"
                     if semantic_type == "MULTIPLE_FILES":
                         input_sig_ed = "<file> [file [...]]"
@@ -260,20 +261,22 @@ def base_cli():
                     elif semantic_type == "SWITCH":
                         input_sig_ed = ""
 
-                    hint_text = input_def["hint"]
-
+                    input_sig = "      "
                     if "cli_short" in input_def.keys():
                         input_sig = "  -" + input_def["cli_short"] + ", "
                     if "cli_arg" in input_def.keys():
                         input_sig += "--" + input_def["cli_arg"]
+                    input_sig = input_sig + " " + input_sig_ed
+
+                    hint_text = ""
+                    if "hint" in input_def.keys():
+                        hint_text = input_def["hint"]
+
                     if "required" in input_def.keys():
                         if input_def["required"]:
                             hint_text = "[REQUIRED] " + hint_text
 
-                    input_sig = input_sig + " " + input_sig_ed
-
-                    if "hint" in input_def.keys():
-                        input_tail_lines = text_wrapper.fill(hint_text).replace("\n", "\n" + (" " * 40))
+                    input_tail_lines = text_wrapper.fill(hint_text).replace("\n", "\n" + (" " * 40))
                     input_str_def = input_sig.ljust(40, " ") + input_tail_lines
                     print(input_str_def)
     else:
@@ -286,7 +289,12 @@ def base_cli():
                         if input_def["multiple"]:
                             new_option_arr = []
                             for input_str in options[option_key]:
-                                new_option_arr = new_option_arr + glob.glob(input_str)
+                                matches = glob.glob(input_str)
+                                if (len(matches) == 0) and os.path.exists(input_str):
+                                    matches = [input_str] # A real path that glob reads as a pattern, e.g. with [ ] in it
+                                if len(matches) == 0:
+                                    print("[ERR] No file matches \"" + input_str + "\", check the path")
+                                new_option_arr = new_option_arr + matches
 
                             #print("GLOB RECONSTRUCTION TRIGGER")
                             #print(options[option_key])
@@ -312,7 +320,8 @@ def base_cli():
             if logfile_path is not None:
                 logfile_fh = open(logfile_path, "a")
                 curr_datetime = datetime.datetime.now(datetime.timezone.utc) # Do not use datetime.UTC - only avail on Python 3.11 or newer
-                logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] SeaSTAR v" + version_string + " invoked with following command\n")
+                print("[LOG] SeaSTAR " + version_string + " started at " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S"))
+                logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] SeaSTAR " + version_string + " invoked with following command\n")
                 logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + " ".join(sys.argv[1:]) + "\n")
 
             def prf(prop, etr):
@@ -345,7 +354,7 @@ def base_cli():
                     curr_datetime = datetime.datetime.now(datetime.timezone.utc)
                     logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + txt + "\n")
 
-            def error_function(txt, err_level):
+            def error_function(txt, err_level = None):
                 if last_line_terminated:
                     print("[ERR] " + txt)
                 else:

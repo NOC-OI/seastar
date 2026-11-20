@@ -10,6 +10,20 @@ import time
 
 csv.field_size_limit(1024 * 1024 * 1024)
 
+def is_number_column(values):
+    """True when every non-empty value reads as a number that keeps its meaning as a float.
+    Codes with a leading zero (times like 085726, station 007) stay text."""
+    values = [v.strip() for v in values if v is not None and v.strip() != ""]
+    for v in values:
+        try:
+            float(v)
+        except ValueError:
+            return False
+        digits = v.lstrip("+-")
+        if len(digits) > 1 and digits[0] == "0" and digits[1].isdigit():
+            return False
+    return len(values) > 0
+
 class IFCBEntryProvider:
     def __init__(self, roi_readers, ifcb_ids, job_object, with_images = True, options = {}):
         self.roi_readers = roi_readers
@@ -139,7 +153,6 @@ class IFCBEntryProvider:
         if "bind_column" in self.options.keys():
             for bindcol_strdef in self.options["bind_column"]:
                 bindcol_def = bindcol_strdef.split(":")
-                print(self.options["bind_column"])
                 if len(bindcol_def) != 3:
                     raise RuntimeError("Could not parse bind column definition: \"" + bindcol_strdef+ "\". Make sure bind column definitions are in the format <input_column>:<f|t>:<output_column> (e.g. --bindcol \"Salinity PSU:f:sample_salinity_psu\").")
                 self.key_translations[bindcol_def[0]] = ("[" + bindcol_def[1] + "]", bindcol_def[2])
@@ -293,14 +306,25 @@ class IFCBEntryProvider:
                         matched_ecotaxa_types.append(self.key_translations[candidate_key][0])
                         matched_ecotaxa_columns.append(self.key_translations[candidate_key][1])
 
+                # Per-ROI tables are feature files: every other column is a feature, bound as object_<name>
+                is_feature_table = "roi_key_column" in metadata_dict_info
                 for candidate_key in dict_keys:
                     if candidate_key not in bound_keys:
-                        unbound_keys.append(candidate_key)
+                        if is_feature_table and candidate_key == "roi_id":
+                            continue # Same value as object_id
+                        if is_feature_table:
+                            match_data_keys.append(candidate_key)
+                            bound_keys.append(candidate_key)
+                            matched_ecotaxa_types.append("[f]")
+                            matched_ecotaxa_columns.append("object_" + candidate_key.lower())
+                        else:
+                            unbound_keys.append(candidate_key)
 
                 if len(unbound_keys) > 0:
                     built_bindcol = ""
                     for unbound_key in unbound_keys:
-                        built_bindcol += "\"" + unbound_key + ":f:sample_" + unbound_key.lower().replace(" ", "_") + "\" "
+                        column_type = "f" if is_number_column([row[unbound_key] for row in metadata_dict]) else "t"
+                        built_bindcol += "\"" + unbound_key + ":" + column_type + ":sample_" + unbound_key.lower().replace(" ", "_") + "\" "
                     self.job_object.log_function("WARNING: No mapping for keys: " + str(unbound_keys))
                     self.job_object.log_function("These columns will be IGNORED and will not be transferred to EcoTaxa")
                     self.job_object.log_function("If you want these columns bound into the EcoTaxa table, use the --bindcol function, e.g.:")
@@ -392,7 +416,7 @@ class IFCBEntryProvider:
                             for row in column_source["dict"]:
                                 if row[column_source["bin_key_column"]] == ifcb_bin:
                                     value = row[self.match_data_keys[ecotaxa_column]]
-                if value is "":
+                if value == "":
                     value = None # Treat empty data cells as null
                 if value is None:
                     self.job_object.error_function("Missing data for ROI " + observation_id + " for column \"" + ecotaxa_column + "\"")
@@ -430,7 +454,7 @@ class MainJob:
         remaining_time = time_per_roi * remaining_rois
         self.report_progress(proportion, remaining_time)
 
-    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s"), log_function = lambda txt : print("[LOG] " + txt), error_function = lambda txt, err_level : print("[ERR] " + txt)):
+    def __init__(self, options, progress_reporting_function = lambda prop, etr : print(str(int(prop*10000)/100) + "% done - ETR " + str(int(etr)) + "s"), log_function = lambda txt : print("[LOG] " + txt), error_function = lambda txt, err_level = None : print("[ERR] " + txt)):
 
         self.options = options
         self.report_progress = progress_reporting_function
@@ -468,7 +492,7 @@ class MainJob:
             ifcb_files.append(file_name)
 
         if len(ifcb_bins) == 0:
-            raise RuntimeException("No IFCB bins supplied!")
+            raise RuntimeError("No IFCB bins supplied!")
 
         self.log_function("Creating ROIReaders")
 
