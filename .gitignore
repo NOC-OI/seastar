@@ -1,6 +1,11 @@
+# Ignore auto-generated version string
+src/seastartool/version_string.py
+
+# Ignore test data
 testdata/
 testout/
 
+# Ignore LaTeX intermediary files
 docs/main.aux
 docs/main.bcf
 docs/main.out

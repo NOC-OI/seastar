@@ -8,7 +8,8 @@ import textwrap
 import datetime
 import glob
 
-version_string = "0.17"
+# Auto-generated at build time from build-install.sh
+from .version_string import version_string
 
 long_help_text = """
 seastar --gui                           Launch the SeaSTAR GUI
@@ -197,7 +198,7 @@ def base_cli():
             print(version_string)
         else:
             print("")
-            print("SeaSTAR v" + version_string)
+            print("SeaSTAR " + version_string)
             print("Sea-faring System for Tagging, Attribution and Redistribution")
             print("")
             print("Authors: Hannah Baldwin <hannah.baldwin@noc.ac.uk>")
@@ -319,7 +320,8 @@ def base_cli():
             if logfile_path is not None:
                 logfile_fh = open(logfile_path, "a")
                 curr_datetime = datetime.datetime.now(datetime.timezone.utc) # Do not use datetime.UTC - only avail on Python 3.11 or newer
-                logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] SeaSTAR v" + version_string + " invoked with following command\n")
+                print("[LOG] SeaSTAR " + version_string + " started at " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S"))
+                logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] SeaSTAR " + version_string + " invoked with following command\n")
                 logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + " ".join(sys.argv[1:]) + "\n")
 
             def prf(prop, etr):
