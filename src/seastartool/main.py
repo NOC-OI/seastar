@@ -260,7 +260,7 @@ def base_cli():
                     elif semantic_type == "SWITCH":
                         input_sig_ed = ""
 
-                    hint_text = input_def["hint"]
+                    hint_text = input_def.get("hint", "") # Some inputs (e.g. --stationid) have no hint
 
                     if "cli_short" in input_def.keys():
                         input_sig = "  -" + input_def["cli_short"] + ", "
@@ -286,7 +286,12 @@ def base_cli():
                         if input_def["multiple"]:
                             new_option_arr = []
                             for input_str in options[option_key]:
-                                new_option_arr = new_option_arr + glob.glob(input_str)
+                                matches = glob.glob(input_str)
+                                if (len(matches) == 0) and os.path.exists(input_str):
+                                    matches = [input_str] # A real path that glob reads as a pattern, e.g. with [ ] in it
+                                if len(matches) == 0:
+                                    print("[ERR] No file matches \"" + input_str + "\", check the path")
+                                new_option_arr = new_option_arr + matches
 
                             #print("GLOB RECONSTRUCTION TRIGGER")
                             #print(options[option_key])
@@ -345,7 +350,7 @@ def base_cli():
                     curr_datetime = datetime.datetime.now(datetime.timezone.utc)
                     logfile_fh.write("[LOG - " + curr_datetime.strftime("%Y-%m-%d %H:%M:%S") + "] " + txt + "\n")
 
-            def error_function(txt, err_level):
+            def error_function(txt, err_level = None):
                 if last_line_terminated:
                     print("[ERR] " + txt)
                 else:

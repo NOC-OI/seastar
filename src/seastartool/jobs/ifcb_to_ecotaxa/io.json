@@ -4,8 +4,7 @@
             "type": "STRING",
             "cli_arg": "project",
             "cli_short": "p",
-            "required": true,
-            "hint": "Project name"
+            "hint": "Name of the project the sample relates to"
         },
         "input_files": {
             "type": "STRING",
@@ -59,16 +58,10 @@
             "cli_arg": "cruise",
             "hint": "Name of the cruise from when the sample was collected"
         },
-        "project_name": {
-            "type": "STRING",
-            "cli_arg": "project",
-            "hint": "Name of the project the sample relates to"
-        },
         "sample_depth": {
             "type": "INTEGER",
             "cli_arg": "depth",
-            "default": 5,
-            "hint": "The depth from which the sample was collected"
+            "hint": "The depth from which the sample was collected, in metres (EcoTaxa columns sample_depth_min and sample_depth_max). Not written when omitted"
         },
         "table_only": {
             "type": "BOOLEAN",
